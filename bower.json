@@ -1,0 +1,15 @@
+{
+  "name": "purescript-sqlsquare",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "output"
+  ],
+  "dependencies": {
+    "purescript-prelude": "^2.4.0",
+    "purescript-matryoshka": "^0.1.1",
+    "purescript-pathy": "^3.0.2",
+    "purescript-debug": "^2.0.0"
+  }
+}
