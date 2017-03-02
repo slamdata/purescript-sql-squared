@@ -8,9 +8,11 @@ import Data.Foldable as F
 import Data.Functor.Mu (Mu)
 import Data.Maybe (Maybe(..))
 import Data.List (List, fromFoldable)
+import Data.Newtype (class Newtype, wrap, unwrap)
 import Data.NonEmpty as NE
 import Data.Tuple (Tuple(..))
 import Data.Path.Pathy (AbsFile, RelFile, Unsandboxed, unsafePrintPath)
+import Data.Lens (Lens', lens, Iso', iso)
 
 import Matryoshka (class Recursive, class Corecursive, Algebra, cata, embed)
 
@@ -97,34 +99,95 @@ data UnaryOperator
 derive instance eqUnaryOperator ∷ Eq UnaryOperator
 
 newtype GroupBy a = GroupBy { keys ∷ List a, having ∷ Maybe a }
+derive instance newtypeGroupBy ∷ Newtype (GroupBy a) _
+derive instance functorGroupBy ∷ Functor GroupBy
+
+_keys ∷ ∀ a nt r. Newtype nt { keys ∷ a | r } ⇒ Lens' nt a
+_keys = lens get set
+  where
+  get ∷ nt → a
+  get = unwrap >>> _.keys
+
+  set ∷ nt → a → nt
+  set nt a =
+    wrap $ _{ keys = a } $ unwrap nt
+
+_having ∷ ∀ a nt r. Newtype nt { having ∷ a |r} ⇒ Lens' nt a
+_having = lens get set
+  where
+  get ∷ nt → a
+  get = unwrap >>> _.having
+
+  set ∷ nt → a → nt
+  set nt a =
+    wrap $ _{ having = a } $ unwrap nt
 
 printGroupBy ∷ Algebra GroupBy String
 printGroupBy (GroupBy { keys, having }) =
   F.intercalate ", " keys <> F.foldMap (" having " <> _) having
 
-derive instance functorGroupBy ∷ Functor GroupBy
 
 newtype Case a = Case { cond ∷ a, expr ∷ a }
+
+derive instance functorCase ∷ Functor Case
+derive instance newtypeCase ∷ Newtype (Case a) _
+
+_cond ∷ ∀ a nt r. Newtype nt { cond ∷ a |r } ⇒ Lens' nt a
+_cond = lens get set
+  where
+  get ∷ nt → a
+  get = unwrap >>> _.cond
+
+  set ∷ nt → a → nt
+  set nt a =
+    wrap $ _{ cond = a } $ unwrap nt
+
+
+_expr ∷ ∀ a nt r. Newtype nt { expr ∷ a|r} ⇒ Lens' nt a
+_expr = lens get set
+  where
+  get ∷ nt → a
+  get = unwrap >>> _.expr
+
+  set ∷ nt → a → nt
+  set nt a =
+    wrap $ _{ expr = a } $ unwrap nt
+
 
 printCase ∷ Algebra Case String
 printCase (Case { cond, expr }) = " when " <> cond <> " then " <> expr
 
-derive instance functorCase ∷ Functor Case
-
 newtype OrderBy a = OrderBy (NE.NonEmpty List (OrderType × a))
+
+_orderBy ∷ ∀ a. Iso' (OrderBy a) (NE.NonEmpty List (OrderType × a))
+_orderBy = iso unwrap wrap
+
+derive instance functorOrderBy ∷ Functor OrderBy
+derive instance newtypeOrderBy ∷ Newtype (OrderBy a) _
 
 printOrderBy ∷ Algebra OrderBy String
 printOrderBy (OrderBy lst) =
   F.intercalate ", " $ lst <#> \(ot × a) → printOrderType ot <> " " <> a
 
-derive instance functorOrderBy ∷ Functor OrderBy
-
 newtype Projection a = Projection { expr ∷ a, alias ∷ Maybe String }
+
+derive instance functorProjection ∷ Functor Projection
+derive instance newtypeProjection ∷ Newtype (Projection a) _
+
+
+_alias ∷ ∀ a nt r. Newtype nt { alias ∷ a|r} ⇒ Lens' nt a
+_alias = lens get set
+  where
+  get ∷ nt → a
+  get = unwrap >>> _.alias
+
+  set ∷ nt → a → nt
+  set nt a =
+    wrap $ _{ alias = a } $ unwrap nt
 
 printProjection ∷ Algebra Projection String
 printProjection (Projection { expr, alias }) = expr <> F.foldMap (" as " <> _) alias
 
-derive instance functorProjection ∷ Functor Projection
 
 data SqlRelation a
   = JoinRelation
