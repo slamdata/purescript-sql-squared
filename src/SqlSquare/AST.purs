@@ -5,13 +5,14 @@ import Prelude
 import Data.Bifunctor (bimap)
 import Data.Either (Either, either)
 import Data.Foldable as F
+import Data.Functor.Mu (Mu)
 import Data.Maybe (Maybe(..))
 import Data.List (List, fromFoldable)
 import Data.NonEmpty as NE
 import Data.Tuple (Tuple(..))
 import Data.Path.Pathy (AbsFile, RelFile, Unsandboxed, unsafePrintPath)
 
-import Matryoshka (class Recursive, class Corecursive, Algebra, cata, embed, Mu)
+import Matryoshka (class Recursive, class Corecursive, Algebra, cata, embed)
 
 infixr 4 type Tuple as ×
 infixr 1 Tuple as ×
@@ -114,7 +115,7 @@ newtype OrderBy a = OrderBy (NE.NonEmpty List (OrderType × a))
 
 printOrderBy ∷ Algebra OrderBy String
 printOrderBy (OrderBy lst) =
-  F.intercalate ", " $ lst <#> \(ot × a) → printOrderType ot <> a
+  F.intercalate ", " $ lst <#> \(ot × a) → printOrderType ot <> " " <> a
 
 derive instance functorOrderBy ∷ Functor OrderBy
 
@@ -363,8 +364,8 @@ printF = case _ of
   Vari s →
     ":" <> s
   Select { isDistinct, projections, relations, filter, groupBy, orderBy } →
-    "select"
-    <> (if isDistinct then " distinct " else "")
+    "select "
+    <> (if isDistinct then "distinct " else "")
     <> (F.intercalate ", " $ map printProjection projections)
     <> (relations # F.foldMap \rs →
          " from " <> printRelation rs)
@@ -379,47 +380,50 @@ print ∷ ∀ t. Recursive t SqlF ⇒ t → String
 print = cata printF
 
 -- | constructors
-vari ∷ ∀ t. Corecursive t SqlF ⇒ String → t
-vari s = embed $ Vari s
+vari_ ∷ ∀ t. Corecursive t SqlF ⇒ String → t
+vari_ s = embed $ Vari s
 
-bool ∷ ∀ t. Corecursive t SqlF ⇒ Boolean → t
-bool b = embed $ BoolLiteral b
+bool_ ∷ ∀ t. Corecursive t SqlF ⇒ Boolean → t
+bool_ b = embed $ BoolLiteral b
 
-null ∷ ∀ t. Corecursive t SqlF ⇒ t
-null = embed NullLiteral
+null_ ∷ ∀ t. Corecursive t SqlF ⇒ t
+null_ = embed NullLiteral
 
-int ∷ ∀ t. Corecursive t SqlF ⇒ Int → t
-int i = embed $ IntLiteral i
+int_ ∷ ∀ t. Corecursive t SqlF ⇒ Int → t
+int_ i = embed $ IntLiteral i
 
-num ∷ ∀ t. Corecursive t SqlF ⇒ Number → t
-num i = embed $ FloatLiteral i
+num_ ∷ ∀ t. Corecursive t SqlF ⇒ Number → t
+num_ i = embed $ FloatLiteral i
 
-unop ∷ ∀ t. Corecursive t SqlF ⇒ UnaryOperator → t → t
-unop op expr = embed $ Unop { op, expr }
+unop_ ∷ ∀ t. Corecursive t SqlF ⇒ UnaryOperator → t → t
+unop_ op expr = embed $ Unop { op, expr }
 
-binop ∷ ∀ t. Corecursive t SqlF ⇒ BinaryOperator → t → t → t
-binop op lhs rhs = embed $ Binop { op, lhs, rhs }
+binop_ ∷ ∀ t. Corecursive t SqlF ⇒ BinaryOperator → t → t → t
+binop_ op lhs rhs = embed $ Binop { op, lhs, rhs }
 
-set ∷ ∀ t. (Corecursive t SqlF, F.Foldable f) ⇒ f t → t
-set l = embed $ SetLiteral $ fromFoldable f
+set_ ∷ ∀ t f. (Corecursive t SqlF, F.Foldable f) ⇒ f t → t
+set_ l = embed $ SetLiteral $ fromFoldable l
 
-array ∷ ∀ t. (Corecursive t SqlF, F.Foldable f) ⇒ f t → t
-array l = embed $ ArrayLiteral $ fromFoldable l
+array_ ∷ ∀ t f. (Corecursive t SqlF, F.Foldable f) ⇒ f t → t
+array_ l = embed $ ArrayLiteral $ fromFoldable l
 
-splice ∷ ∀ t. Corecursive t SqlF ⇒ Maybe t → t
-splice m = embed $ Splice m
+splice_ ∷ ∀ t. Corecursive t SqlF ⇒ Maybe t → t
+splice_ m = embed $ Splice m
 
-ident ∷ ∀ t. Corecursive t SqlF ⇒ String → t
-ident i = embed $ Ident i
+ident_ ∷ ∀ t. Corecursive t SqlF ⇒ String → t
+ident_ i = embed $ Ident i
 
-match ∷ ∀ t. Corecursive t SqlF ⇒ t → List (Case t) → Maybe t → t
-match expr cases default_ = embed $ Match { expr, cases, default_ }
+match_ ∷ ∀ t. Corecursive t SqlF ⇒ t → List (Case t) → Maybe t → t
+match_ expr cases default_ = embed $ Match { expr, cases, default_ }
 
-switch ∷ ∀ t. Corecursive t SqlF ⇒ List (Case t) → Maybe t → t
-switch cases default_ = embed $ Switch { cases, default_ }
+switch_ ∷ ∀ t. Corecursive t SqlF ⇒ List (Case t) → Maybe t → t
+switch_ cases default_ = embed $ Switch { cases, default_ }
 
 let_ ∷ ∀ t. Corecursive t SqlF ⇒ String → t → t → t
 let_ ident bindTo in_ = embed $ Let { ident, bindTo, in_ }
+
+invokeFunction_ ∷ ∀ t. Corecursive t SqlF ⇒ String → List t → t
+invokeFunction_ name args = embed $ InvokeFunction {name, args}
 
 -- when_ (bool true) # then_ (num 1.0) :P
 when_ ∷ ∀ t. t → (t → Case t)
@@ -428,17 +432,24 @@ when_ cond = Case <<< { cond, expr: _ }
 then_ ∷ ∀ t. (t → Case t) → t → Case t
 then_ f t = f t
 
-select
-  ∷ ∀ t
-  . Corecursive t SqlF
+select_
+  ∷ ∀ t f
+  . (Corecursive t SqlF, F.Foldable f)
   ⇒ Boolean
-  → List (Projection t)
+  → f (Projection t)
   → Maybe (SqlRelation t)
-  → Maybe a
-  → Maybe (GroupBy a)
-  → Maybe (OrderBy a)
-select isDistinct projections relations filter groupBy orderBy =
-  embed $ Select { isDistinct, projections, relations, filter, groupBy, orderBy }
+  → Maybe t
+  → Maybe (GroupBy t)
+  → Maybe (OrderBy t)
+  → t
+select_ isDistinct projections relations filter groupBy orderBy =
+  embed $ Select { isDistinct
+                 , projections: fromFoldable projections
+                 , relations
+                 , filter
+                 , groupBy
+                 , orderBy
+                 }
 
 
 -- project_ (ident "foo") # as_ "bar"
@@ -449,7 +460,7 @@ project_ expr = Projection {expr, alias: Nothing}
 as_ ∷ ∀ t. String → Projection t → Projection t
 as_ s (Projection r) = Projection r { alias = Just s }
 
-groupBy_ ∷ ∀ t f. Foldable f ⇒ f t → GroupBy t
+groupBy_ ∷ ∀ t f. F.Foldable f ⇒ f t → GroupBy t
 groupBy_ f = GroupBy { keys: fromFoldable f, having: Nothing }
 
 having_ ∷ ∀ t. t → GroupBy t → GroupBy t
