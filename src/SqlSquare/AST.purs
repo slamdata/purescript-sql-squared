@@ -184,8 +184,8 @@ type IdentRelR =
 
 data SqlRelation a
   = JoinRelation (JoinRelR a)
-  | ExprRelationAST (ExprRelR a)
-  | TableRelationAST (TableRelR a)
+  | ExprRelation (ExprRelR a)
+  | TableRelation (TableRelR a)
   | VariRelation (VariRelR a)
   | IdentRelation IdentRelR
 
@@ -195,13 +195,13 @@ _JoinRelation = prism' JoinRelation case _ of
   _ → Nothing
 
 _ExprRelation ∷ ∀ a. Prism' (SqlRelation a) (ExprRelR a)
-_ExprRelation = prism' ExprRelationAST case _ of
-  ExprRelationAST r → Just r
+_ExprRelation = prism' ExprRelation case _ of
+  ExprRelation r → Just r
   _ → Nothing
 
 _TableRelation ∷ ∀ a. Prism' (SqlRelation a) (TableRelR a)
-_TableRelation = prism' TableRelationAST case _ of
-  TableRelationAST r → Just r
+_TableRelation = prism' TableRelation case _ of
+  TableRelation r → Just r
   _ → Nothing
 
 _VariRelation ∷ ∀ a. Prism' (SqlRelation a) (VariRelR a)
@@ -730,3 +730,7 @@ buildSelect f =
              , groupBy: Nothing
              , orderBy: Nothing
              }
+
+buildProjection ∷ ∀ t. Corecursive t SqlF ⇒ (ProjectionR t → ProjectionR t) → t
+buildProjection f =
+  embed $ Projection $ f { expr:
