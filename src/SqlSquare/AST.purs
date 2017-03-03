@@ -6,6 +6,7 @@ import Data.Bifunctor (bimap)
 import Data.Either (Either, either)
 import Data.Foldable as F
 import Data.Functor.Mu (Mu)
+import Data.Functor.Coproduct (Coproduct, coproduct, left, right)
 import Data.Maybe (Maybe(..))
 import Data.List (List(..), fromFoldable)
 import Data.Newtype (class Newtype, wrap, unwrap)
@@ -14,16 +15,9 @@ import Data.Tuple (Tuple(..))
 import Data.Path.Pathy (AbsFile, RelFile, Unsandboxed, unsafePrintPath)
 import Data.Lens (Prism', prism', Lens', lens, Iso', iso)
 
-import Matryoshka (class Recursive, class Corecursive, Algebra, cata, embed, project)
+import SqlSquare.Utils (type (×), (×), (∘), (⋙))
 
-infixr 4 type Tuple as ×
-infixr 1 Tuple as ×
-infixr 9 compose as ∘
-
-composeFlipped ∷ ∀ a b c d. Semigroupoid a ⇒ a b c → a c d → a b d
-composeFlipped f g = compose g f
-
-infixr 9 composeFlipped as ⋙
+import Matryoshka (class Recursive, class Corecursive, Algebra, cata, embed, project, Coalgebra)
 
 type FUPath = Either (RelFile Unsandboxed) (AbsFile Unsandboxed)
 
@@ -31,12 +25,14 @@ data OrderType
   = ASC
   | DESC
 
+
 printOrderType ∷ OrderType → String
 printOrderType = case _ of
   ASC → "asc"
   DESC → "desc"
 
 derive instance eqOrderType ∷ Eq OrderType
+derive instance ordOrderType ∷ Ord OrderType
 
 data JoinType
   = LeftJoin
@@ -52,6 +48,7 @@ printJoinType = case _ of
   InnerJoin → "inner join"
 
 derive instance eqJoinType ∷ Eq JoinType
+derive instance ordJoinType ∷ Ord JoinType
 
 data BinaryOperator
   = IfUndefined
@@ -85,6 +82,7 @@ data BinaryOperator
   | UnshiftMap
 
 derive instance eqBinaryOperator ∷ Eq BinaryOperator
+derive instance ordBinaryOperator ∷ Ord BinaryOperator
 
 data UnaryOperator
   = Not
@@ -103,6 +101,7 @@ data UnaryOperator
   | UnshiftArray
 
 derive instance eqUnaryOperator ∷ Eq UnaryOperator
+derive instance ordUnaryOperator ∷ Ord UnaryOperator
 
 _Newtype ∷ ∀ n t. Newtype n t ⇒ Iso' n t
 _Newtype = iso unwrap wrap
@@ -110,6 +109,8 @@ _Newtype = iso unwrap wrap
 newtype GroupBy a = GroupBy { keys ∷ List a, having ∷ Maybe a }
 derive instance newtypeGroupBy ∷ Newtype (GroupBy a) _
 derive instance functorGroupBy ∷ Functor GroupBy
+derive instance eqGroupBy ∷ Eq a ⇒ Eq (GroupBy a)
+derive instance ordGroupBy ∷ Ord a ⇒ Ord (GroupBy a)
 
 _GroupBy ∷ ∀ a. Iso' (GroupBy a) {keys ∷ List a, having ∷ Maybe a}
 _GroupBy = _Newtype
@@ -123,6 +124,8 @@ newtype Case a = Case { cond ∷ a, expr ∷ a }
 
 derive instance functorCase ∷ Functor Case
 derive instance newtypeCase ∷ Newtype (Case a) _
+derive instance eqCase ∷ Eq a ⇒ Eq (Case a)
+derive instance ordCase ∷ Ord a ⇒ Ord (Case a)
 
 _Case ∷ ∀ a. Iso' (Case a) { cond ∷ a, expr ∷ a }
 _Case = _Newtype
@@ -135,6 +138,8 @@ newtype OrderBy a = OrderBy (NE.NonEmpty List (OrderType × a))
 
 derive instance functorOrderBy ∷ Functor OrderBy
 derive instance newtypeOrderBy ∷ Newtype (OrderBy a) _
+derive instance eqOrderBy ∷ Eq a ⇒ Eq (OrderBy a)
+derive instance ordOrderBy ∷ Ord a ⇒ Ord (OrderBy a)
 
 _OrderBy ∷ ∀ a. Iso' (OrderBy a) (NE.NonEmpty List (OrderType × a))
 _OrderBy = _Newtype
@@ -147,6 +152,8 @@ newtype Projection a = Projection { expr ∷ a, alias ∷ Maybe String }
 
 derive instance functorProjection ∷ Functor Projection
 derive instance newtypeProjection ∷ Newtype (Projection a) _
+derive instance eqProjection ∷ Eq a ⇒ Eq (Projection a)
+derive instance ordProjection ∷ Ord a ⇒ Ord (Projection a)
 
 _Projection ∷ ∀ a. Iso' (Projection a) { expr ∷ a, alias ∷ Maybe String }
 _Projection = _Newtype
@@ -215,14 +222,16 @@ _IdentRelation = prism' IdentRelation case _ of
   _ → Nothing
 
 derive instance functorSqlRelation ∷ Functor SqlRelation
+derive instance eqSqlRelation ∷ Eq a ⇒ Eq (SqlRelation a)
+derive instance ordSqlRelation ∷ Ord a ⇒ Ord (SqlRelation a)
 
 printRelation ∷ Algebra SqlRelation String
 printRelation = case _ of
-  ExprRelationAST {expr, aliasName} →
+  ExprRelation {expr, aliasName} →
     "(" <> expr <> ") as " <> aliasName
   VariRelation { vari, alias} →
     vari <> F.foldMap (" as " <> _) alias
-  TableRelationAST { tablePath, alias } →
+  TableRelation { tablePath, alias } →
     "`"
     <> either unsafePrintPath unsafePrintPath tablePath
     <> "`"
@@ -381,7 +390,10 @@ data SqlF a
   | BoolLiteral Boolean
   | Vari String
   | Select (SelectR a)
+  | Parens a
 
+derive instance eqSqlF ∷ Eq a ⇒ Eq (SqlF a)
+derive instance ordSqlF ∷ Ord a ⇒ Ord (SqlF a)
 
 _SetLiteral ∷ ∀ t. (Recursive t SqlF, Corecursive t SqlF) ⇒ Prism' t (List t)
 _SetLiteral = prism' (embed ∘ SetLiteral) $ project ⋙ case _ of
@@ -473,6 +485,10 @@ _Select = prism' (embed ∘ Select) $ project ⋙ case _ of
   Select r → Just r
   _ → Nothing
 
+_Parens ∷ ∀ t. (Recursive t SqlF, Corecursive t SqlF) ⇒ Prism' t t
+_Parens = prism' (embed ∘ Parens) $ project ⋙ case _ of
+  Parens t → Just t
+  _ → Nothing
 
 instance functorAST ∷ Functor SqlF where
   map f = case _ of
@@ -533,6 +549,8 @@ instance functorAST ∷ Functor SqlF where
       SetLiteral $ map f lst
     ArrayLiteral lst →
       ArrayLiteral $ map f lst
+    Parens t →
+      Parens $ f t
 
 
 printF ∷ Algebra SqlF String
@@ -624,7 +642,8 @@ printF = case _ of
     <> (filter # F.foldMap \f → " where " <> f)
     <> (groupBy # F.foldMap \gb → " group by " <> printGroupBy gb)
     <> (orderBy # F.foldMap \ob → " order by " <> printOrderBy ob)
-
+  Parens t →
+    "(" <> t <> ")"
 
 type Sql = Mu SqlF
 
@@ -704,7 +723,7 @@ select_ isDistinct projections relations filter groupBy orderBy =
                  }
 
 
-select ∷ ∀ t f. Corecursive t SqlF ⇒ SelectR t → t
+select ∷ ∀ t. Corecursive t SqlF ⇒ SelectR t → t
 select = embed ∘ Select
 
 -- project_ (ident "foo") # as_ "bar"
@@ -731,6 +750,5 @@ buildSelect f =
              , orderBy: Nothing
              }
 
-buildProjection ∷ ∀ t. Corecursive t SqlF ⇒ (ProjectionR t → ProjectionR t) → t
-buildProjection f =
-  embed $ Projection $ f { expr:
+pars_ ∷ ∀ t. Corecursive t SqlF ⇒ t → t
+pars_ = embed ∘ Parens
