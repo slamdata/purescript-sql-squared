@@ -7,7 +7,7 @@ import Data.Either (Either, either)
 import Data.Foldable as F
 import Data.Functor.Mu (Mu)
 import Data.Maybe (Maybe(..))
-import Data.List (List, fromFoldable)
+import Data.List (List(..), fromFoldable)
 import Data.Newtype (class Newtype, wrap, unwrap)
 import Data.NonEmpty as NE
 import Data.Tuple (Tuple(..))
@@ -704,6 +704,9 @@ select_ isDistinct projections relations filter groupBy orderBy =
                  }
 
 
+select ∷ ∀ t f. Corecursive t SqlF ⇒ SelectR t → t
+select = embed ∘ Select
+
 -- project_ (ident "foo") # as_ "bar"
 -- project_ (ident "foo")
 project_ ∷ ∀ t. t → Projection t
@@ -717,3 +720,13 @@ groupBy_ f = GroupBy { keys: fromFoldable f, having: Nothing }
 
 having_ ∷ ∀ t. t → GroupBy t → GroupBy t
 having_ t (GroupBy r) = GroupBy r{ having = Just t }
+
+buildSelect ∷ ∀ t. Corecursive t SqlF ⇒ (SelectR t → SelectR t) → t
+buildSelect f =
+  select $ f { isDistinct: false
+             , projections: Nil
+             , relations: Nothing
+             , filter: Nothing
+             , groupBy: Nothing
+             , orderBy: Nothing
+             }
