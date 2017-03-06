@@ -10,9 +10,12 @@
     "purescript-prelude": "^2.4.0",
     "purescript-matryoshka": "^0.1.1",
     "purescript-pathy": "^3.0.2",
-    "purescript-debug": "^2.0.0",
     "purescript-profunctor": "^2.0.0",
-    "purescript-profunctor-lenses": "^2.6.0",
-    "purescript-search": "^2.0.0"
+    "purescript-profunctor-lenses": "^2.6.0"
+  },
+  "devDependencies": {
+    "purescript-argonaut": "^2.0.0",
+    "purescript-search": "^2.0.0",
+    "purescript-debug": "^2.0.0"
   }
 }

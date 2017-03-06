@@ -6,18 +6,19 @@ import Data.Bifunctor (bimap)
 import Data.Either (Either, either)
 import Data.Foldable as F
 import Data.Functor.Mu (Mu)
-import Data.Functor.Coproduct (Coproduct, coproduct, left, right)
 import Data.Maybe (Maybe(..))
 import Data.List (List(..), fromFoldable)
 import Data.Newtype (class Newtype, wrap, unwrap)
 import Data.NonEmpty as NE
-import Data.Tuple (Tuple(..))
 import Data.Path.Pathy (AbsFile, RelFile, Unsandboxed, unsafePrintPath)
 import Data.Lens (Prism', prism', Lens', lens, Iso', iso)
+import Data.String.Regex as RX
+import Data.String.Regex.Flags as RXF
+import Data.String.Regex.Unsafe as URX
 
 import SqlSquare.Utils (type (×), (×), (∘), (⋙))
 
-import Matryoshka (class Recursive, class Corecursive, Algebra, cata, embed, project, Coalgebra)
+import Matryoshka (class Recursive, class Corecursive, Algebra, cata, embed, project)
 
 type FUPath = Either (RelFile Unsandboxed) (AbsFile Unsandboxed)
 
@@ -607,7 +608,7 @@ printF = case _ of
     ShiftArrayValues → expr <> "[_]"
     UnshiftArray → "[" <> expr <> "...]"
   Ident s →
-    s
+    "`" <> s <> "`"
   InvokeFunction {name, args} →
     name <> "(" <> F.intercalate "," args <> ")"
   Match { expr, cases, else_ } →
@@ -626,7 +627,7 @@ printF = case _ of
   FloatLiteral n →
     show n
   StringLiteral s →
-    show s
+    renderString s
   NullLiteral →
     "null"
   BoolLiteral b →
@@ -644,6 +645,21 @@ printF = case _ of
     <> (orderBy # F.foldMap \ob → " order by " <> printOrderBy ob)
   Parens t →
     "(" <> t <> ")"
+  where
+  replaceAll
+    ∷ String
+    → String
+    → String
+    → String
+  replaceAll i =
+      RX.replace $ URX.unsafeRegex i RXF.global
+
+  renderString
+    ∷ String
+    → String
+  renderString str =
+    "\"" <> replaceAll "\"" "\\\"" str <> "\""
+
 
 type Sql = Mu SqlF
 
@@ -665,6 +681,9 @@ int_ i = embed $ IntLiteral i
 
 num_ ∷ ∀ t. Corecursive t SqlF ⇒ Number → t
 num_ i = embed $ FloatLiteral i
+
+string_ ∷ ∀ t. Corecursive t SqlF ⇒ String → t
+string_ s = embed $ StringLiteral s
 
 unop_ ∷ ∀ t. Corecursive t SqlF ⇒ UnaryOperator → t → t
 unop_ op expr = embed $ Unop { op, expr }
