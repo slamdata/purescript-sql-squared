@@ -63,7 +63,7 @@ printRelation = case _ of
     <> "`"
     <> F.foldMap (" as " <> _) alias
   IdentRelation { ident, alias } →
-    ident <> F.foldMap (" as " <> _) alias
+    ident <> F.foldMap (\x → " as `" <> x <> "`") alias
   JoinRelation { left, right, joinType, clause } →
     printRelation left
     <> " "

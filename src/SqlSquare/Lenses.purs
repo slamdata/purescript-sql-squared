@@ -1,55 +1,59 @@
 module SqlSquare.Lenses where
 
-import Data.Newtype (class Newtype, wrap, unwrap)
+import Prelude
 
 import Data.Lens (Prism', prism', Lens', lens, Iso', iso)
+import Data.List as L
+import Data.Maybe as M
+import Data.Newtype (class Newtype, wrap, unwrap)
+import Data.NonEmpty as NE
+
+import Matryoshka (class Recursive, class Corecursive, embed, project)
+
+import SqlSquare.AST as S
+import SqlSquare.Utils (type (×), (∘), (⋙))
 
 _Newtype ∷ ∀ n t. Newtype n t ⇒ Iso' n t
 _Newtype = iso unwrap wrap
 
-
-{-
-_GroupBy ∷ ∀ a. Iso' (GroupBy a) {keys ∷ List a, having ∷ Maybe a}
+_GroupBy ∷ ∀ a. Iso' (S.GroupBy a) {keys ∷ L.List a, having ∷ M.Maybe a}
 _GroupBy = _Newtype
 
-_Case ∷ ∀ a. Iso' (Case a) { cond ∷ a, expr ∷ a }
+_Case ∷ ∀ a. Iso' (S.Case a) { cond ∷ a, expr ∷ a }
 _Case = _Newtype
 
-_OrderBy ∷ ∀ a. Iso' (OrderBy a) (NE.NonEmpty List (OrderType × a))
+_OrderBy ∷ ∀ a. Iso' (S.OrderBy a) (NE.NonEmpty L.List (S.OrderType × a))
 _OrderBy = _Newtype
 
-
-_Projection ∷ ∀ a. Iso' (Projection a) { expr ∷ a, alias ∷ Maybe String }
+_Projection ∷ ∀ a. Iso' (S.Projection a) { expr ∷ a, alias ∷ M.Maybe String }
 _Projection = _Newtype
 
+_JoinRelation ∷ ∀ a. Prism' (S.Relation a) (S.JoinRelR a)
+_JoinRelation = prism' S.JoinRelation case _ of
+  S.JoinRelation r → M.Just r
+  _ → M.Nothing
 
-_JoinRelation ∷ ∀ a. Prism' (SqlRelation a) (JoinRelR a)
-_JoinRelation = prism' JoinRelation case _ of
-  JoinRelation r → Just r
-  _ → Nothing
+_ExprRelation ∷ ∀ a. Prism' (S.Relation a) (S.ExprRelR a)
+_ExprRelation = prism' S.ExprRelation case _ of
+  S.ExprRelation r → M.Just r
+  _ → M.Nothing
 
-_ExprRelation ∷ ∀ a. Prism' (SqlRelation a) (ExprRelR a)
-_ExprRelation = prism' ExprRelation case _ of
-  ExprRelation r → Just r
-  _ → Nothing
+_TableRelation ∷ ∀ a. Prism' (S.Relation a) (S.TableRelR a)
+_TableRelation = prism' S.TableRelation case _ of
+  S.TableRelation r → M.Just r
+  _ → M.Nothing
 
-_TableRelation ∷ ∀ a. Prism' (SqlRelation a) (TableRelR a)
-_TableRelation = prism' TableRelation case _ of
-  TableRelation r → Just r
-  _ → Nothing
+_VariRelation ∷ ∀ a. Prism' (S.Relation a) (S.VariRelR a)
+_VariRelation = prism' S.VariRelation case _ of
+  S.VariRelation r → M.Just r
+  _ → M.Nothing
 
-_VariRelation ∷ ∀ a. Prism' (SqlRelation a) (VariRelR a)
-_VariRelation = prism' VariRelation case _ of
-  VariRelation r → Just r
-  _ → Nothing
+_IdentRelation ∷ ∀ a. Prism' (S.Relation a) S.IdentRelR
+_IdentRelation = prism' S.IdentRelation case _ of
+  S.IdentRelation r → M.Just r
+  _ → M.Nothing
 
-_IdentRelation ∷ ∀ a. Prism' (SqlRelation a) IdentRelR
-_IdentRelation = prism' IdentRelation case _ of
-  IdentRelation r → Just r
-  _ → Nothing
--}
 
-{-
 _lhs ∷ ∀ a r. Lens' { lhs ∷ a |r } a
 _lhs = lens _.lhs _{ lhs = _ }
 
@@ -132,100 +136,97 @@ _tablePath ∷ ∀ a r. Lens' { tablePath ∷ a|r } a
 _tablePath = lens _.tablePath _{ tablePath = _ }
 
 
--}
-{-
-_SetLiteral ∷ ∀ t. (Recursive t SqlF, Corecursive t SqlF) ⇒ Prism' t (List t)
-_SetLiteral = prism' (embed ∘ SetLiteral) $ project ⋙ case _ of
-  SetLiteral lst → Just lst
-  _ → Nothing
+_SetLiteral ∷ ∀ t. (Recursive t S.SqlF, Corecursive t S.SqlF) ⇒ Prism' t (L.List t)
+_SetLiteral = prism' (embed ∘ S.SetLiteral) $ project ⋙ case _ of
+  S.SetLiteral lst → M.Just lst
+  _ → M.Nothing
 
-_ArrayLiteral ∷ ∀ t. (Recursive t SqlF, Corecursive t SqlF) ⇒ Prism' t (List t)
-_ArrayLiteral = prism' (embed ∘ ArrayLiteral) $ project ⋙ case _ of
-  ArrayLiteral lst → Just lst
-  _ → Nothing
+_ArrayLiteral ∷ ∀ t. (Recursive t S.SqlF, Corecursive t S.SqlF) ⇒ Prism' t (L.List t)
+_ArrayLiteral = prism' (embed ∘ S.ArrayLiteral) $ project ⋙ case _ of
+  S.ArrayLiteral lst → M.Just lst
+  _ → M.Nothing
 
-_MapLiteral ∷ ∀ t. (Recursive t SqlF, Corecursive t SqlF) ⇒ Prism' t (List (t × t))
-_MapLiteral = prism' (embed ∘ MapLiteral) $ project ⋙ case _ of
-  MapLiteral tpls → Just tpls
-  _ → Nothing
+_MapLiteral ∷ ∀ t. (Recursive t S.SqlF, Corecursive t S.SqlF) ⇒ Prism' t (L.List (t × t))
+_MapLiteral = prism' (embed ∘ S.MapLiteral) $ project ⋙ case _ of
+  S.MapLiteral tpls → M.Just tpls
+  _ → M.Nothing
 
-_Splice ∷ ∀ t. (Recursive t SqlF, Corecursive t SqlF) ⇒ Prism' t (Maybe t)
-_Splice = prism' (embed ∘ Splice) $ project ⋙ case _ of
-  Splice m → Just m
-  _ → Nothing
+_Splice ∷ ∀ t. (Recursive t S.SqlF, Corecursive t S.SqlF) ⇒ Prism' t (M.Maybe t)
+_Splice = prism' (embed ∘ S.Splice) $ project ⋙ case _ of
+  S.Splice m → M.Just m
+  _ → M.Nothing
 
-_Binop ∷ ∀ t. (Recursive t SqlF, Corecursive t SqlF) ⇒ Prism' t (BinopR t)
-_Binop = prism' (embed ∘ Binop) $ project ⋙ case _ of
-  Binop b → Just b
-  _ → Nothing
+_Binop ∷ ∀ t. (Recursive t S.SqlF, Corecursive t S.SqlF) ⇒ Prism' t (S.BinopR t)
+_Binop = prism' (embed ∘ S.Binop) $ project ⋙ case _ of
+  S.Binop b → M.Just b
+  _ → M.Nothing
 
-_Unop ∷ ∀ t. (Recursive t SqlF, Corecursive t SqlF) ⇒ Prism' t (UnopR t)
-_Unop = prism' (embed ∘ Unop) $ project ⋙ case _ of
-  Unop r → Just r
-  _ → Nothing
+_Unop ∷ ∀ t. (Recursive t S.SqlF, Corecursive t S.SqlF) ⇒ Prism' t (S.UnopR t)
+_Unop = prism' (embed ∘ S.Unop) $ project ⋙ case _ of
+  S.Unop r → M.Just r
+  _ → M.Nothing
 
-_Ident ∷ ∀ t. (Recursive t SqlF, Corecursive t SqlF) ⇒ Prism' t String
-_Ident = prism' (embed ∘ Ident) $ project ⋙ case _ of
-  Ident s → Just s
-  _ → Nothing
+_Ident ∷ ∀ t. (Recursive t S.SqlF, Corecursive t S.SqlF) ⇒ Prism' t String
+_Ident = prism' (embed ∘ S.Ident) $ project ⋙ case _ of
+  S.Ident s → M.Just s
+  _ → M.Nothing
 
-_InvokeFunction ∷ ∀ t. (Recursive t SqlF, Corecursive t SqlF) ⇒ Prism' t (InvokeFunctionR t)
-_InvokeFunction = prism' (embed ∘ InvokeFunction) $ project ⋙ case _ of
-  InvokeFunction r → Just r
-  _ → Nothing
+_InvokeFunction ∷ ∀ t. (Recursive t S.SqlF, Corecursive t S.SqlF) ⇒ Prism' t (S.InvokeFunctionR t)
+_InvokeFunction = prism' (embed ∘ S.InvokeFunction) $ project ⋙ case _ of
+  S.InvokeFunction r → M.Just r
+  _ → M.Nothing
 
-_Match ∷ ∀ t. (Recursive t SqlF, Corecursive t SqlF) ⇒ Prism' t (MatchR t)
-_Match = prism' (embed ∘ Match) $ project ⋙ case _ of
-  Match r → Just r
-  _ → Nothing
+_Match ∷ ∀ t. (Recursive t S.SqlF, Corecursive t S.SqlF) ⇒ Prism' t (S.MatchR t)
+_Match = prism' (embed ∘ S.Match) $ project ⋙ case _ of
+  S.Match r → M.Just r
+  _ → M.Nothing
 
-_Switch ∷ ∀ t. (Recursive t SqlF, Corecursive t SqlF) ⇒ Prism' t (SwitchR t)
-_Switch = prism' (embed ∘ Switch) $ project ⋙ case _ of
-  Switch r → Just r
-  _ → Nothing
+_Switch ∷ ∀ t. (Recursive t S.SqlF, Corecursive t S.SqlF) ⇒ Prism' t (S.SwitchR t)
+_Switch = prism' (embed ∘ S.Switch) $ project ⋙ case _ of
+  S.Switch r → M.Just r
+  _ → M.Nothing
 
-_Let ∷ ∀ t. (Recursive t SqlF, Corecursive t SqlF) ⇒ Prism' t (LetR t)
-_Let = prism' (embed ∘ Let) $ project ⋙ case _ of
-  Let r → Just r
-  _ → Nothing
+_Let ∷ ∀ t. (Recursive t S.SqlF, Corecursive t S.SqlF) ⇒ Prism' t (S.LetR t)
+_Let = prism' (embed ∘ S.Let) $ project ⋙ case _ of
+  S.Let r → M.Just r
+  _ → M.Nothing
 
-_IntLiteral ∷ ∀ t. (Recursive t SqlF, Corecursive t SqlF) ⇒ Prism' t Int
-_IntLiteral = prism' (embed ∘ IntLiteral) $ project ⋙ case _ of
-  IntLiteral r → Just r
-  _ → Nothing
+_IntLiteral ∷ ∀ t. (Recursive t S.SqlF, Corecursive t S.SqlF) ⇒ Prism' t Int
+_IntLiteral = prism' (embed ∘ S.IntLiteral) $ project ⋙ case _ of
+  S.IntLiteral r → M.Just r
+  _ → M.Nothing
 
-_FloatLiteral ∷ ∀ t. (Recursive t SqlF, Corecursive t SqlF) ⇒ Prism' t Number
-_FloatLiteral = prism' (embed ∘ FloatLiteral) $ project ⋙ case _ of
-  FloatLiteral r → Just r
-  _ → Nothing
+_FloatLiteral ∷ ∀ t. (Recursive t S.SqlF, Corecursive t S.SqlF) ⇒ Prism' t Number
+_FloatLiteral = prism' (embed ∘ S.FloatLiteral) $ project ⋙ case _ of
+  S.FloatLiteral r → M.Just r
+  _ → M.Nothing
 
-_StringLiteral ∷ ∀ t. (Recursive t SqlF, Corecursive t SqlF) ⇒ Prism' t String
-_StringLiteral = prism' (embed ∘ StringLiteral) $ project ⋙ case _ of
-  StringLiteral r → Just r
-  _ → Nothing
+_StringLiteral ∷ ∀ t. (Recursive t S.SqlF, Corecursive t S.SqlF) ⇒ Prism' t String
+_StringLiteral = prism' (embed ∘ S.StringLiteral) $ project ⋙ case _ of
+  S.StringLiteral r → M.Just r
+  _ → M.Nothing
 
-_NullLiteral ∷ ∀ t. (Recursive t SqlF, Corecursive t SqlF) ⇒ Prism' t Unit
-_NullLiteral = prism' (const $ embed $ NullLiteral) $ project ⋙ case _ of
-  NullLiteral → Just unit
-  _ → Nothing
+_NullLiteral ∷ ∀ t. (Recursive t S.SqlF, Corecursive t S.SqlF) ⇒ Prism' t Unit
+_NullLiteral = prism' (const $ embed $ S.NullLiteral) $ project ⋙ case _ of
+  S.NullLiteral → M.Just unit
+  _ → M.Nothing
 
-_BoolLiteral ∷ ∀ t. (Recursive t SqlF, Corecursive t SqlF) ⇒ Prism' t Boolean
-_BoolLiteral = prism' (embed ∘ BoolLiteral) $ project ⋙ case _ of
-  BoolLiteral b → Just b
-  _ → Nothing
+_BoolLiteral ∷ ∀ t. (Recursive t S.SqlF, Corecursive t S.SqlF) ⇒ Prism' t Boolean
+_BoolLiteral = prism' (embed ∘ S.BoolLiteral) $ project ⋙ case _ of
+  S.BoolLiteral b → M.Just b
+  _ → M.Nothing
 
-_Vari ∷ ∀ t. (Recursive t SqlF, Corecursive t SqlF) ⇒ Prism' t String
-_Vari = prism' (embed ∘ Vari) $ project ⋙ case _ of
-  Vari r → Just r
-  _ → Nothing
+_Vari ∷ ∀ t. (Recursive t S.SqlF, Corecursive t S.SqlF) ⇒ Prism' t String
+_Vari = prism' (embed ∘ S.Vari) $ project ⋙ case _ of
+  S.Vari r → M.Just r
+  _ → M.Nothing
 
-_Select ∷ ∀ t. (Recursive t SqlF, Corecursive t SqlF) ⇒ Prism' t (SelectR t)
-_Select = prism' (embed ∘ Select) $ project ⋙ case _ of
-  Select r → Just r
-  _ → Nothing
+_Select ∷ ∀ t. (Recursive t S.SqlF, Corecursive t S.SqlF) ⇒ Prism' t (S.SelectR t)
+_Select = prism' (embed ∘ S.Select) $ project ⋙ case _ of
+  S.Select r → M.Just r
+  _ → M.Nothing
 
-_Parens ∷ ∀ t. (Recursive t SqlF, Corecursive t SqlF) ⇒ Prism' t t
-_Parens = prism' (embed ∘ Parens) $ project ⋙ case _ of
-  Parens t → Just t
-  _ → Nothing
--}
+_Parens ∷ ∀ t. (Recursive t S.SqlF, Corecursive t S.SqlF) ⇒ Prism' t t
+_Parens = prism' (embed ∘ S.Parens) $ project ⋙ case _ of
+  S.Parens t → M.Just t
+  _ → M.Nothing

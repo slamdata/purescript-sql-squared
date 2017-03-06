@@ -65,7 +65,7 @@ when cond = Case ∘ { cond, expr: _ }
 then_ ∷ ∀ t. (t → Case t) → t → Case t
 then_ f t = f t
 
-select_
+select
   ∷ ∀ t f
   . (Corecursive t SqlF, F.Foldable f)
   ⇒ Boolean
@@ -75,7 +75,7 @@ select_
   → Maybe (GroupBy t)
   → Maybe (OrderBy t)
   → t
-select_ isDistinct projections relations filter gb orderBy =
+select isDistinct projections relations filter gb orderBy =
   embed $ Select { isDistinct
                  , projections: L.fromFoldable projections
                  , relations
@@ -85,13 +85,10 @@ select_ isDistinct projections relations filter gb orderBy =
                  }
 
 
-select ∷ ∀ t. Corecursive t SqlF ⇒ SelectR t → t
-select = embed ∘ Select
-
 -- project (ident "foo") # as "bar"
 -- project (ident "foo")
-project ∷ ∀ t. t → Projection t
-project expr = Projection {expr, alias: Nothing}
+projection ∷ ∀ t. t → Projection t
+projection expr = Projection {expr, alias: Nothing}
 
 as ∷ ∀ t. String → Projection t → Projection t
 as s (Projection r) = Projection r { alias = Just s }
@@ -104,13 +101,13 @@ having t (GroupBy r) = GroupBy r{ having = Just t }
 
 buildSelect ∷ ∀ t. Corecursive t SqlF ⇒ (SelectR t → SelectR t) → t
 buildSelect f =
-  select $ f { isDistinct: false
-             , projections: L.Nil
-             , relations: Nothing
-             , filter: Nothing
-             , groupBy: Nothing
-             , orderBy: Nothing
-             }
+  embed $ Select $ f { isDistinct: false
+                     , projections: L.Nil
+                     , relations: Nothing
+                     , filter: Nothing
+                     , groupBy: Nothing
+                     , orderBy: Nothing
+                     }
 
 pars ∷ ∀ t. Corecursive t SqlF ⇒ t → t
 pars = embed ∘ Parens

@@ -16,6 +16,7 @@
   "devDependencies": {
     "purescript-argonaut": "^2.0.0",
     "purescript-search": "^2.0.0",
-    "purescript-debug": "^2.0.0"
+    "purescript-debug": "^2.0.0",
+    "purescript-test-unit": "^10.1.0"
   }
 }

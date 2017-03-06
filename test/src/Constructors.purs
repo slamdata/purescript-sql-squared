@@ -1,0 +1,65 @@
+module Test.Constructors where
+
+import Prelude
+
+import Data.Either (Either(..))
+import Data.List as L
+import Data.Lens ((.~), (<>~), (?~))
+import Data.Maybe (Maybe(..))
+import Data.NonEmpty as NE
+import Data.Path.Pathy as Pt
+
+import SqlSquare as S
+import SqlSquare.Utils ((×), (∘))
+
+import Test.Unit (suite, test, TestSuite)
+import Test.Unit.Assert as Assert
+
+selectQuery ∷ S.Sql
+selectQuery =
+  S.select
+    true
+    [ S.projection (S.ident "foo") # S.as "field"
+    , S.projection $ S.splice $ Just $ S.binop S.FieldDeref (S.ident "bar") (S.ident "baz")
+    ]
+    ( map
+        (S.TableRelation ∘ { alias: Nothing, tablePath: _ } ∘ Right)
+        $ Pt.parseAbsFile "/mongo/testDb/patients" )
+    ( Just $ S.binop S.Eq (S.ident "quux") (S.num 12.0) )
+    ( Just $ S.groupBy [ S.ident "zzz" ] # S.having ( S.binop S.Gt (S.ident "ooo") ( S.int 2)) )
+    ( Just $ S.OrderBy $ NE.singleton $ S.ASC × (S.ident "zzz") )
+
+buildSelectQuery ∷ S.Sql
+buildSelectQuery =
+  S.buildSelect
+    $ (S._isDistinct .~ true)
+    ∘ (S._projections <>~
+         (L.singleton
+          $ S.projection
+          $ S.splice
+          $ Just
+          $ S.binop
+              S.FieldDeref
+              (S.ident "bar")
+              (S.ident "baz")))
+    ∘ (S._projections <>~  (L.singleton $ S.projection (S.ident "foo") # S.as "field"))
+    ∘ (S._relations .~
+         ( map (S.TableRelation ∘ { alias: Nothing, tablePath: _} ∘ Right)
+             $ Pt.parseAbsFile "/mongo/testDb/patients"))
+    ∘ (S._filter ?~ S.binop S.Eq (S.ident "quux") (S.num 12.0))
+    ∘ (S._groupBy ?~
+         (S.groupBy [ S.ident "zzz" ] # S.having (S.binop S.Gt (S.ident "ooo") (S.int 2))))
+    ∘ (S._orderBy ?~ S.OrderBy (NE.singleton $ S.ASC × (S.ident "zzz")))
+
+expectedSqlString ∷ String
+expectedSqlString =
+  "select distinct `foo` as field, `bar`.`baz`.* from `/mongo/testDb/patients` where `quux` = 12.0 group by `zzz` having `ooo` > 2 order by asc `zzz`"
+
+
+testSuite ∷ ∀ e. TestSuite e
+testSuite =
+  suite "tests for sql constructors" do
+    test "constructing select query with multiple arguments"
+      $ Assert.equal expectedSqlString $ S.print selectQuery
+    test "building select query with lenses"
+      $ Assert.equal expectedSqlString $ S.print buildSelectQuery

@@ -42,7 +42,7 @@ import SqlSquare.GroupBy (GroupBy(..), printGroupBy)
 import SqlSquare.Case (Case(..), printCase)
 import SqlSquare.OrderBy (OrderBy(..), printOrderBy)
 import SqlSquare.Projection (Projection(..), printProjection)
-import SqlSquare.Relation (Relation(..), printRelation, FUPath)
+import SqlSquare.Relation (Relation(..), printRelation, FUPath, JoinRelR, ExprRelR, TableRelR, VariRelR, IdentRelR)
 
 import Matryoshka (class Recursive, Algebra, cata)
 

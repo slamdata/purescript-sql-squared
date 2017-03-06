@@ -3,7 +3,7 @@
 module SqlSquare.Search where
 
 import Prelude
-
+{-
 import Control.MonadZero (guard)
 
 import Data.Int as Int
@@ -294,3 +294,4 @@ labelStrings ∷ ∀ f. Functor f ⇒ f SS.Label → f String
 labelStrings = map case _ of
   SS.Meta l → l
   SS.Common l → l
+-}
