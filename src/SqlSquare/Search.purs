@@ -22,8 +22,9 @@ import Data.String.Regex.Flags as RXF
 import Global (readFloat, isNaN)
 
 import SqlSquare.Utils ((∘), (×), (⋙))
-import SqlSquare.AST (SqlF(..), Sql, buildSelect, FUPath, SqlRelation(..))
+import SqlSquare.AST (SqlF(..), Sql, FUPath, Relation(..))
 import SqlSquare.AST as S
+import SqlSquare.Constructors (buildSelect)
 
 import Matryoshka (Algebra, Transform, ElgotAlgebra, cata, transAna, elgotZygo)
 
