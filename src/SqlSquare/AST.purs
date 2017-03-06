@@ -25,10 +25,12 @@ module SqlSquare.AST
 import Prelude
 
 import Data.Bifunctor (bimap)
+import Data.Eq (class Eq1)
 import Data.Foldable as F
 import Data.Functor.Mu (Mu)
-import Data.Maybe (Maybe(..))
 import Data.List as L
+import Data.Maybe (Maybe(..))
+import Data.Ord (class Ord1)
 import Data.String.Regex as RX
 import Data.String.Regex.Flags as RXF
 import Data.String.Regex.Unsafe as URX
@@ -111,6 +113,11 @@ data SqlF a
 
 derive instance eqSqlF ∷ Eq a ⇒ Eq (SqlF a)
 derive instance ordSqlF ∷ Ord a ⇒ Ord (SqlF a)
+
+instance eq1SqlF ∷ Eq1 SqlF where
+  eq1 = eq
+instance ord1SqlF ∷ Ord1 SqlF where
+  compare1 = compare
 
 instance functorAST ∷ Functor SqlF where
   map f = case _ of

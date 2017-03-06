@@ -12,19 +12,17 @@ import Data.List ((:))
 import Data.List as L
 import Data.Maybe (Maybe(..))
 import Data.Set as Set
-import Data.Tuple (fst)
+import Data.Tuple (Tuple, fst)
 
 import SqlSquare as S
-import SqlSquare.Utils ((∘), (⋙))
+import SqlSquare.Utils ((×), (∘), (⋙))
 
-import Matryoshka (ana, Coalgebra)
+import Matryoshka (ana, elgotPara, Coalgebra, ElgotAlgebra)
 
 import Test.Unit (suite, test, TestSuite)
 import Test.Unit.Assert as Assert
 
 import Partial.Unsafe (unsafePartial)
-
-import Debug.Trace
 
 data UnfoldableJC = JC JCursor | S String | I Int
 
@@ -44,6 +42,31 @@ fields ∷ JS.JArray → L.List S.Sql
 fields arr =
   map jcursorToSql $ L.fromFoldable $ F.foldMap (Set.fromFoldable ∘ map fst) $ map JS.toPrims arr
 
+allParentsF ∷ ElgotAlgebra (Tuple S.Sql) S.SqlF (L.List S.Sql)
+allParentsF (parent × sqlF) = case sqlF of
+  S.Splice (Just ps) → ps
+  S.Unop { op: S.FlattenArrayValues, expr } → parent : expr
+  S.Unop { op: S.FlattenMapValues, expr } → parent : expr
+  S.Binop { op: S.FieldDeref, lhs } → parent : lhs
+  S.Binop { op: S.IndexDeref, lhs } → parent : lhs
+  _ → L.Nil
+
+allParents ∷ S.Sql → L.List S.Sql
+allParents = elgotPara allParentsF
+
+allFields ∷ JS.JArray → L.List S.Sql
+allFields =
+  L.fromFoldable ∘ F.foldMap (Set.fromFoldable ∘ allParents) ∘ fields
+
+jarray ∷ JS.JArray
+jarray =
+  map (unsafePartial fromRight ∘ jsonParser) jsonStrings
+  where
+  jsonStrings =
+    [ """{"foo": [{"bar": 1}, 12], "bar": {"baz": false}}"""
+    , """{"foo": true}"""
+    , """[12, null]"""
+    ]
 testSuite ∷ ∀ e. TestSuite e
 testSuite =
   suite "tests for argonaut example" do
@@ -61,12 +84,6 @@ testSuite =
         Assert.equal expected $ map (S.print ∘ jcursorToSql) js
     test "extraction of fields works"
       let
-        jsonStrings =
-          [ """{"foo": [{"bar": 1}, 12], "bar": {"baz": false}}"""
-          , """{"foo": true}"""
-          , """[12, null]"""
-          ]
-        jarray = map (unsafePartial fromRight ∘ jsonParser) jsonStrings
         actualFields =
           Set.fromFoldable
           $ map S.print $ fields jarray
@@ -81,3 +98,39 @@ testSuite =
           : L.Nil
       in
         Assert.equal expectedFields actualFields
+    test "allParents extracted"
+      let
+        field =
+          jcursorToSql
+          $ JField "foo"
+          $ JField "bar"
+          $ JIndex 0
+          $ JField "baz"
+          $ JIndex 1
+          $ JCursorTop
+        expected =
+          Set.fromFoldable
+          $ "*.`foo`"
+          : "*.`foo`.`bar`"
+          : "*.`foo`.`bar`[0]"
+          : "*.`foo`.`bar`[0].`baz`"
+          : "*.`foo`.`bar`[0].`baz`[1]"
+          : L.Nil
+      in
+        Assert.equal expected $ Set.fromFoldable $ map S.print $ allParents field
+    test "allFields works"
+      let
+        actualFields = Set.fromFoldable $ map S.print $ allFields jarray
+        expectedFields =
+          Set.fromFoldable
+          $ "*[0]"
+          : "*[1]"
+          : "*.`foo`"
+          : "*.`foo`[1]"
+          : "*.`foo`[0].`bar`"
+          : "*.`bar`.`baz`"
+          : "*.`bar`"
+          : L.Nil
+      in
+        Assert.equal "1" "1"
+--        Assert.equal expectedFields actualFields
