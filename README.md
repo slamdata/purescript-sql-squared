@@ -14,9 +14,9 @@ bower install purescript-sqlsquare
 ## Documentation
 
 There are two examples (extracted from [slamdata](https://github.com/slamdata/slamdata))
-+ Extraction sql fields from array of jsons: [here](test/src/Test/Argonaut.purs)
++ Extraction sql fields from array of jsons: [here](test/src/Argonaut.purs)
 + Interpretation query language of [purescript-search](https://github.com/slamdata/purescript-search):
-[here](test/src/Test/Search.purs)
+[here](test/src/Search.purs)
 
 
 Module documentation is published on Pursuit: [http://pursuit.purescript.org/packages/purescript-sqlsquare](http://pursuit.purescript.org/packages/purescript-sqlsquare)
