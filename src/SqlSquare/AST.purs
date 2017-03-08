@@ -46,7 +46,9 @@ import SqlSquare.OrderBy (OrderBy(..), printOrderBy)
 import SqlSquare.Projection (Projection(..), printProjection)
 import SqlSquare.Relation (Relation(..), printRelation, FUPath, JoinRelR, ExprRelR, TableRelR, VariRelR, IdentRelR)
 
-import Matryoshka (class Recursive, Algebra, cata)
+import Matryoshka (class Recursive, Algebra, cata, transParaT, project)
+
+import Debug.Trace as DT
 
 type BinopR a =
   { lhs ∷ a

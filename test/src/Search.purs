@@ -5,31 +5,39 @@ module Test.Search where
 
 import Prelude
 
+import Control.Alt ((<|>))
 import Control.MonadZero (guard)
 
+import Data.Argonaut as JS
+import Data.Either (Either(..), fromRight)
 import Data.Foldable as F
 import Data.Int as Int
 import Data.Lens ((.~), (?~))
 import Data.List ((:))
 import Data.List as L
-import Data.Maybe (Maybe(..), fromMaybe, isJust)
+import Data.Maybe (Maybe(..), isJust, fromJust, fromMaybe)
 import Data.Newtype (unwrap)
+import Data.Path.Pathy as Pt
 import Data.String as Str
 import Data.String.Regex as RX
 import Data.String.Regex.Flags as RXF
 import Data.String.Regex.Unsafe as URX
-import Data.Tuple (Tuple)
 
 import Global (readFloat, isNaN)
 
 import SqlSquare as S
-import SqlSquare.Utils ((∘), (×), (⋙))
+import SqlSquare.Utils ((∘), (×))
 
-import Matryoshka (Algebra, Transform, ElgotAlgebra, cata, transAna, elgotZygo)
+import Matryoshka (Algebra, Coalgebra, Transform, ana, cata, transAna)
+
+import Partial.Unsafe (unsafePartial)
 
 import Test.Unit (suite, test, TestSuite)
 import Test.Unit.Assert as Assert
 
+import Test.Argonaut as Ar
+
+import Text.SlamSearch (mkQuery)
 import Text.SlamSearch.Types as SS
 
 --------------------------------------------------------------------------------
@@ -87,8 +95,8 @@ needInterval = RX.test intervalRegex
 -- Accessors
 --------------------------------------------------------------------------------
 
-labelStrings ∷ ∀ f. Functor f ⇒ f SS.Label → f String
-labelStrings = map case _ of
+labelString ∷ SS.Label → String
+labelString = case _ of
   SS.Meta l → l
   SS.Common l → l
 
@@ -164,10 +172,32 @@ flattenIndex = transAna flattenIndexF
 
 needDistinctF ∷ Algebra S.SqlF Boolean
 needDistinctF = case _ of
+  S.SetLiteral ns → F.or ns
+  S.ArrayLiteral ns → F.or ns
+  S.MapLiteral tpls → F.any (\(a × b) → a || b) tpls
+  S.Splice Nothing → false
+  S.Splice (Just a) → a
+  S.Binop { lhs, rhs } → lhs || rhs
   S.Unop { op: S.FlattenArrayValues } → true
   S.Unop { op: S.FlattenMapValues } → true
-  S.Binop { lhs, rhs } → lhs || rhs
-  _ → false
+  S.Unop { expr } → expr
+  S.Ident _ → false
+  S.InvokeFunction { args } → F.or args
+  S.Match { expr, cases, else_ } →
+    expr || F.any (\(S.Case { cond, expr: e }) → e || cond) cases || fromMaybe false else_
+  S.Switch { cases, else_ } →
+    F.any (\(S.Case { cond, expr }) → cond || expr) cases || fromMaybe false else_
+  S.Let { bindTo, in_ } →
+    bindTo || in_
+  S.IntLiteral _ → false
+  S.StringLiteral _ → false
+  S.FloatLiteral _ → false
+  S.NullLiteral → false
+  S.BoolLiteral _ → false
+  S.Vari _ → false
+  S.Parens a → a
+  S.Select { projections, filter } →
+    F.any (\(S.Projection { expr }) → expr) projections || fromMaybe false filter
 
 needDistinct ∷ S.Sql → Boolean
 needDistinct = cata needDistinctF
@@ -176,53 +206,43 @@ needDistinct = cata needDistinctF
 -- Interpretation
 --------------------------------------------------------------------------------
 
+extractFields ∷ SS.Term → Maybe S.Sql
+extractFields (SS.Term { labels })
+  | L.null labels = Nothing
+  | otherwise = Just $ ana labelToFieldF $ map labelString $ L.reverse labels
+
 termToSql ∷ L.List S.Sql → SS.Term → S.Sql
-termToSql fields (SS.Term { include, predicate, labels})
+termToSql fs (SS.Term { include, predicate, labels})
   | not include =
-      S.unop S.Not $ S.pars $ termToSql fields $ SS.Term { include: true, predicate, labels}
+      S.unop S.Not $ termToSql fields $ SS.Term { include: true, predicate, labels}
   | otherwise =
-      ors $ flip predicateToSql predicate <$> L.filter (labelsConform labels) fields
+      ors
+      $ flip predicateToSql predicate
+      <$> (if L.null labels then fs else pure $ labelsToField labels)
 
--- | This function checks if Sql field is conforming search label list
-labelsConform ∷ L.List SS.Label → S.Sql → Boolean
-labelsConform ls = elgotZygo listIndexF $ labelsConformF $ labelStrings ls
 
--- | Algebra of deref depth
-listIndexF ∷ Algebra S.SqlF (Maybe Int)
-listIndexF = case _ of
-  S.Splice Nothing → Just 0
-  S.Splice (Just i) → map (add one) i
-  S.Binop { op: S.FieldDeref, lhs: Just i } → Just $ i + one
-  S.Binop { op: S.IndexDeref, lhs: Just i } → Just $ i + one
-  S.Unop { op: S.FlattenArrayValues, expr: Just i } → Just $ i + one
-  S.Unop { op: S.FlattenMapValues, expr: Just i } → Just $ i + one
-  _ → Nothing
-
--- | Algebra checking that deref rhs conforms label from label list
-labelsConformF ∷ L.List String → ElgotAlgebra (Tuple (Maybe Int)) S.SqlF Boolean
-labelsConformF labelsString (mbIx × sqlF) = case sqlF of
-  S.Splice acc →
-    fromMaybe false acc && ixedLabel == Just "*"
-  S.IntLiteral i →
-    fromMaybe false $ ixedLabel >>= Int.fromString ⋙ map (eq i)
-  S.StringLiteral i →
-    ixedLabel == Just i
-  S.Ident i →
-    ixedLabel == Just i
-  S.Unop {op: S.FlattenArrayValues, expr} →
-    expr && (ixedLabel == Just "*" || ixedLabel == Just "[*]")
-  S.Unop {op: S.FlattenMapValues, expr} →
-    expr && (ixedLabel == Just "*" || ixedLabel == Just "{*}")
-  S.Binop { op: S.FieldDeref, lhs, rhs } →
-    lhs && rhs
-  S.Binop { op: S.IndexDeref, lhs, rhs } →
-    lhs && rhs
-  _ →
-    false
+labelToFieldF ∷ Coalgebra S.SqlF (L.List String)
+labelToFieldF = case _ of
+  L.Nil → S.Splice Nothing
+  hd : L.Nil → case toInt hd of
+    Just i → S.IntLiteral i
+    Nothing → S.Ident hd
+  hd : tl → case toInt hd of
+    Just i → S.Binop { op: S.IndexDeref, lhs: tl, rhs: pure hd }
+    Nothing → case hd of
+      "[*]" → S.Unop { op: S.FlattenArrayValues, expr: tl }
+      "{*}" → S.Unop { op: S.FlattenMapValues, expr: tl }
+      "*" → S.Unop { op: S.FlattenMapValues, expr: tl }
+      a → S.Binop { op: S.FieldDeref, lhs: tl, rhs: pure hd }
   where
-  ixedLabel ∷ Maybe String
-  ixedLabel = mbIx >>= L.index labelsString
+  toInt ∷ String → Maybe Int
+  toInt s =
+    (Int.fromString s)
+    <|> (Str.stripSuffix (Str.Pattern "]") s >>= Str.stripPrefix (Str.Pattern "[") >>= Int.fromString)
 
+
+labelsToField ∷ L.List SS.Label → S.Sql
+labelsToField = ana labelToFieldF ∘ map labelString ∘ L.reverse
 
 -- | Getting sql field and search predicate construct sql predicate
 predicateToSql ∷ S.Sql → SS.Predicate → S.Sql
@@ -326,30 +346,74 @@ queryToSql
   → SS.SearchQuery
   → S.FUPath
   → S.Sql
-queryToSql fields query tablePath =
+queryToSql fs query path =
   S.buildSelect
     $ (S._isDistinct .~ isDistinct)
     ∘ (S._projections .~ topFields)
-    ∘ (S._relations ?~ S.TableRelation { alias: Nothing, tablePath })
+    ∘ (S._relations ?~ S.TableRelation { alias: Nothing, tablePath: path })
     ∘ (S._filter ?~ filter)
   where
   topFields =
-    map (S.Projection ∘ { expr: _, alias: Nothing}) $ L.filter isTopField fields
+    map (S.Projection ∘ { expr: _, alias: Nothing}) $ L.filter isTopField fs
 
-  isDistinct = F.any needDistinct $ map flattenIndex fields
+  isDistinct = needDistinct filter
 
   filter =
     ands
     $ map ors
     $ unwrap
-    $ map (termToSql fields) query
+    $ map (termToSql $ map flattenIndex fs) query
 
 --------------------------------------------------------------------------------
 -- Tests
 --------------------------------------------------------------------------------
 
+fields ∷ L.List S.Sql
+fields = Ar.allFields jarray
+  where
+  jarray ∷ JS.JArray
+  jarray = map (unsafePartial fromRight ∘ JS.jsonParser) jsonStrings
+
+  jsonStrings ∷ Array String
+  jsonStrings =
+    [ """{"foo": 1, "bar": 2}"""
+    , """{"foo": [1, 2], "bar": null}"""
+    , """{"foo": 3, "bar": { "valid": false, "value": "baz" } }"""
+    ]
+
+searchQueries ∷ L.List SS.SearchQuery
+searchQueries =
+  F.foldMap (F.foldMap pure) $  map mkQuery searchStrings
+  where
+  searchStrings ∷ L.List String
+  searchStrings =
+    """ba"""
+    : """foo:"[*]":2"""
+    : """bar:>1"""
+    : """false"""
+    : """bar:valid:=false"""
+    : """"non-existing":foo"""
+    : L.Nil
+
+expectedOutput ∷ L.List String
+expectedOutput =
+  """select distinct *.`bar`, *.`foo` from `/mongo/testDb/patients` where (((search(*.`bar`,"^.*ba.*$",true)) or ((search(*.`foo`,"^.*ba.*$",true))) or ((search(*.`bar`.`valid`,"^.*ba.*$",true))) or ((search(*.`bar`.`value`,"^.*ba.*$",true))) or ((search(*.`foo`[*],"^.*ba.*$",true))) or ((search(*.`foo`[*],"^.*ba.*$",true)))))"""
+  : """select distinct *.`bar`, *.`foo` from `/mongo/testDb/patients` where (((search(`foo`[*],"^.*2.*$",true) or (`foo`[*] = 2.0) or (`foo`[*] = 2))))"""
+  : """select *.`bar`, *.`foo` from `/mongo/testDb/patients` where (((LOWER(`bar`) > LOWER("1") or (`bar` > 1.0) or (`bar` > 1))))"""
+  : """select distinct *.`bar`, *.`foo` from `/mongo/testDb/patients` where ((search(*.`bar`,"^.*false.*$",true) or (*.`bar` = false) or (search(*.`foo`,"^.*false.*$",true) or (*.`foo` = false)) or (search(*.`bar`.`valid`,"^.*false.*$",true) or (*.`bar`.`valid` = false)) or (search(*.`bar`.`value`,"^.*false.*$",true) or (*.`bar`.`value` = false)) or (search(*.`foo`[*],"^.*false.*$",true) or (*.`foo`[*] = false)) or (search(*.`foo`[*],"^.*false.*$",true) or (*.`foo`[*] = false))))"""
+  : """select *.`bar`, *.`foo` from `/mongo/testDb/patients` where (((LOWER(`bar`.`valid`) = LOWER("false") or (`bar`.`valid` = false))))"""
+  : """select *.`bar`, *.`foo` from `/mongo/testDb/patients` where ((((search(`non-existing`,"^.*foo.*$",true)))))"""
+  : L.Nil
+
+tablePath ∷ S.FUPath
+tablePath = Right $ unsafePartial fromJust $ Pt.parseAbsFile "/mongo/testDb/patients"
+
 testSuite ∷ ∀ e. TestSuite e
 testSuite =
   suite "purescript-search interpreter tests" do
-    test "dummy" do
-      Assert.equal true true
+    test "search query is interpreted correctly"
+      let
+         querySqls = map (\sq → queryToSql fields sq tablePath) searchQueries
+         querySqlsStrings = map S.print querySqls
+      in
+        void $ L.zipWithA Assert.equal expectedOutput querySqlsStrings
