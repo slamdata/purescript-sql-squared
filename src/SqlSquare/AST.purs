@@ -27,13 +27,17 @@ import Prelude
 import Data.Bifunctor (bimap)
 import Data.Eq (class Eq1)
 import Data.Foldable as F
+import Data.Traversable as T
 import Data.Functor.Mu (Mu)
 import Data.List as L
 import Data.Maybe (Maybe(..))
+import Data.Monoid (mempty)
 import Data.Ord (class Ord1)
 import Data.String.Regex as RX
 import Data.String.Regex.Flags as RXF
 import Data.String.Regex.Unsafe as URX
+
+import Data.Json.Extended.Signature (EJsonF, renderEJsonF)
 
 import SqlSquare.Utils (type (×), (×), (∘), (⋙))
 import SqlSquare.OrderType as OT
@@ -92,10 +96,9 @@ type SelectR a =
   , orderBy ∷ Maybe (OrderBy a)
   }
 
-data SqlF a
+data SqlF literal a
   = SetLiteral (L.List a)
-  | ArrayLiteral (L.List a)
-  | MapLiteral (L.List (a × a))
+  | Literal (literal a)
   | Splice (Maybe a)
   | Binop (BinopR a)
   | Unop (UnopR a)
@@ -104,24 +107,19 @@ data SqlF a
   | Match (MatchR a)
   | Switch (SwitchR a)
   | Let (LetR a)
-  | IntLiteral Int
-  | FloatLiteral Number
-  | StringLiteral String
-  | NullLiteral
-  | BoolLiteral Boolean
   | Vari String
   | Select (SelectR a)
   | Parens a
 
-derive instance eqSqlF ∷ Eq a ⇒ Eq (SqlF a)
-derive instance ordSqlF ∷ Ord a ⇒ Ord (SqlF a)
+derive instance eqSqlF ∷ (Eq a, Eq (l a)) ⇒ Eq (SqlF l a)
+derive instance ordSqlF ∷ (Ord a, Ord (l a)) ⇒ Ord (SqlF l a)
 
-instance eq1SqlF ∷ Eq1 SqlF where
-  eq1 = eq
-instance ord1SqlF ∷ Ord1 SqlF where
-  compare1 = compare
+--instance eq1SqlF ∷ Eq1 l ⇒ Eq1 (SqlF l) where
 
-instance functorAST ∷ Functor SqlF where
+--instance ord1SqlF ∷ Ord (l a) ⇒ Ord1 (SqlF l) where
+--  compare1 = compare
+
+instance functorAST ∷ Functor l ⇒ Functor (SqlF l) where
   map f = case _ of
     Select { isDistinct, projections, relations, filter, groupBy, orderBy } →
       Select { isDistinct
@@ -133,23 +131,11 @@ instance functorAST ∷ Functor SqlF where
              }
     Vari s →
       Vari s
-    BoolLiteral b →
-      BoolLiteral b
-    NullLiteral →
-      NullLiteral
-    StringLiteral s →
-      StringLiteral s
-    FloatLiteral n →
-      FloatLiteral n
-    IntLiteral i →
-      IntLiteral i
     Let { ident, bindTo, in_ } →
       Let { ident
           , bindTo: f bindTo
           , in_: f in_
           }
-    MapLiteral lst →
-      MapLiteral $ map (bimap f f) lst
     Splice a →
       Splice $ map f a
     Binop { lhs, rhs, op } →
@@ -178,20 +164,136 @@ instance functorAST ∷ Functor SqlF where
              }
     SetLiteral lst →
       SetLiteral $ map f lst
-    ArrayLiteral lst →
-      ArrayLiteral $ map f lst
+    Literal l →
+      Literal $ map f l
     Parens t →
       Parens $ f t
 
 
-printF ∷ Algebra SqlF String
-printF = case _ of
+
+instance foldableSqlF ∷ F.Foldable l ⇒ F.Foldable (SqlF l) where
+  foldMap f = case _ of
+    Ident _ → mempty
+    SetLiteral lst → F.foldMap f lst
+    Splice mbA → F.foldMap f mbA
+    Binop { lhs, rhs } → f lhs <> f rhs
+    Unop { expr } → f expr
+    InvokeFunction { args } → F.foldMap f args
+    Match { expr, cases, else_ } → f expr <> F.foldMap (F.foldMap f) cases <> F.foldMap f else_
+    Switch { cases, else_} → F.foldMap (F.foldMap f) cases <> F.foldMap f else_
+    Let { bindTo, in_ } → f bindTo <> f in_
+    Vari _ → mempty
+    Select { projections, relations, filter, groupBy, orderBy } →
+      F.foldMap (F.foldMap f) projections
+      <> F.foldMap (F.foldMap f) relations
+      <> F.foldMap f filter
+      <> F.foldMap (F.foldMap f) groupBy
+      <> F.foldMap (F.foldMap f) orderBy
+    Parens a → f a
+    Literal l → F.foldMap f l
+  foldl f a = case _ of
+    Ident _ → a
+    SetLiteral lst → F.foldl f a lst
+    Splice mbA → F.foldl f a mbA
+    Binop { lhs, rhs } → f (f a lhs) rhs
+    Unop { expr } → f a expr
+    InvokeFunction { args } → F.foldl f a args
+    Match { expr, cases, else_ } →
+      F.foldl f (F.foldl (F.foldl f) (f a expr) cases) else_
+    Switch { cases, else_ } →
+      F.foldl f (F.foldl (F.foldl f) a cases) else_
+    Let { bindTo, in_} →
+      f (f a bindTo) in_
+    Vari _ → a
+    Select { projections, relations, filter, groupBy, orderBy } →
+      F.foldl (F.foldl f)
+      (F.foldl (F.foldl f)
+       (F.foldl f
+        (F.foldl (F.foldl f)
+         (F.foldl (F.foldl f) a
+          projections)
+         relations)
+        filter)
+       groupBy)
+      orderBy
+    Parens p → f a p
+    Literal l → F.foldl f a l
+  foldr f a = case _ of
+    Ident _ → a
+    SetLiteral lst → F.foldr f a lst
+    Splice mbA → F.foldr f a mbA
+    Binop { lhs, rhs } → f rhs $ f lhs a
+    Unop { expr } → f expr a
+    InvokeFunction { args } → F.foldr f a args
+    Match { expr, cases, else_ } →
+      F.foldr f (F.foldr (flip $ F.foldr f) (f expr a) cases) else_
+    Switch { cases, else_ } →
+      F.foldr f (F.foldr (flip $ F.foldr f) a cases) else_
+    Let { bindTo, in_ } →
+      f bindTo $ f in_ a
+    Vari _ → a
+    Select { projections, relations, filter, groupBy, orderBy } →
+      F.foldr (flip $ F.foldr f)
+      (F.foldr (flip $ F.foldr f)
+       (F.foldr f
+        (F.foldr (flip $ F.foldr f)
+         (F.foldr (flip $ F.foldr f) a
+          projections)
+         relations)
+        filter)
+       groupBy)
+      orderBy
+    Parens p → f p a
+    Literal l → F.foldr f a l
+
+
+
+instance traversableSqlF ∷ T.Traversable l ⇒ T.Traversable (SqlF l) where
+  traverse f = case _ of
+    SetLiteral lst → map SetLiteral $ T.traverse f lst
+    Literal l → map Literal $ T.traverse f l
+    Splice mbA → map Splice $ T.traverse f mbA
+    Binop { lhs, rhs, op } →
+      map Binop $ { lhs: _, rhs: _, op } <$> f lhs <*> f rhs
+    Unop { op, expr } →
+      map Unop $ { expr: _, op } <$> f expr
+    Ident s → pure $ Ident s
+    InvokeFunction { name, args } →
+      map InvokeFunction $ { name, args:_ } <$> T.traverse f args
+    Match { expr, cases, else_ } →
+      map Match
+      $ { expr: _, cases: _, else_: _ }
+      <$> f expr
+      <*> T.traverse (T.traverse f) cases
+      <*> T.traverse f else_
+    Switch { cases, else_ } →
+      map Switch
+      $ { cases: _, else_: _ }
+      <$> T.traverse (T.traverse f) cases
+      <*> T.traverse f else_
+    Let { bindTo, in_, ident } →
+      map Let
+      $ { bindTo: _, in_: _, ident }
+      <$> f bindTo
+      <*> f in_
+    Vari s → pure $ Vari s
+    Parens p → map Parens $ f p
+    Select { isDistinct, projections, relations, filter, groupBy, orderBy } →
+      map Select
+      $ { isDistinct, projections: _, relations: _, filter: _, groupBy: _, orderBy: _}
+      <$> T.traverse (T.traverse f) projections
+      <*> T.traverse (T.traverse f) relations
+      <*> T.traverse f filter
+      <*> T.traverse (T.traverse f) groupBy
+      <*> T.traverse (T.traverse f) orderBy
+  sequence = T.sequenceDefault
+
+printF ∷ ∀ l. Algebra l String → Algebra (SqlF l) String
+printF printLiteralF = case _ of
+  Splice Nothing → "*"
+  Splice (Just s) → s <> ".*"
   SetLiteral lst → "(" <> F.intercalate ", " lst <> ")"
-  ArrayLiteral lst → "[" <> F.intercalate ", " lst <> "]"
-  MapLiteral tplLst → "{" <> F.intercalate ", " (map (\(k × v) → k <> ": " <> v) tplLst) <> "}"
-  Splice mb → case mb of
-    Nothing → "*"
-    Just a → a <> ".*"
+  Literal l → printLiteralF l
   Binop {lhs, rhs, op} → case op of
     IfUndefined → lhs <> " ?? " <> rhs
     Range → lhs <> " .. " <> rhs
@@ -252,16 +354,6 @@ printF = case _ of
     <> F.foldMap (" else " <> _) else_
   Let { ident, bindTo, in_ } →
     ident <> " := " <> bindTo <> "; " <> in_
-  IntLiteral int →
-    show int
-  FloatLiteral n →
-    show n
-  StringLiteral s →
-    renderString s
-  NullLiteral →
-    "null"
-  BoolLiteral b →
-    show b
   Vari s →
     ":" <> s
   Select { isDistinct, projections, relations, filter, groupBy, orderBy } →
@@ -275,22 +367,8 @@ printF = case _ of
     <> (orderBy # F.foldMap \ob → " order by " <> printOrderBy ob)
   Parens t →
     "(" <> t <> ")"
-  where
-  replaceAll
-    ∷ String
-    → String
-    → String
-    → String
-  replaceAll i =
-      RX.replace $ URX.unsafeRegex i RXF.global
 
-  renderString
-    ∷ String
-    → String
-  renderString str =
-    "\"" <> replaceAll "\"" "\\\"" str <> "\""
+type Sql = Mu (SqlF EJsonF)
 
-type Sql = Mu SqlF
-
-print ∷ ∀ t. Recursive t SqlF ⇒ t → String
-print = cata printF
+print ∷ Sql → String
+print = cata (printF renderEJsonF)

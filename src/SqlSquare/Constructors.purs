@@ -2,60 +2,67 @@ module SqlSquare.Constructors where
 
 import Prelude
 
+import Data.Array as Arr
+import Data.Json.Extended.Signature (EJsonF(..))
 import Data.Foldable as F
+import Data.HugeNum as HN
 import Data.List as L
+import Data.Map as Map
 import Data.Maybe (Maybe(..))
 
 import Matryoshka (class Corecursive, embed)
 
 import SqlSquare.AST  (SqlF(..), Relation, GroupBy(..), OrderBy, BinaryOperator, UnaryOperator, (∘), SelectR, Case(..), Projection(..))
 
-vari ∷ ∀ t. Corecursive t SqlF ⇒ String → t
+vari ∷ ∀ t. Corecursive t (SqlF EJsonF) ⇒ String → t
 vari s = embed $ Vari s
 
-bool ∷ ∀ t. Corecursive t SqlF ⇒ Boolean → t
-bool b = embed $ BoolLiteral b
+bool ∷ ∀ t. Corecursive t (SqlF EJsonF) ⇒ Boolean → t
+bool b = embed $ Literal $ Boolean b
 
-null ∷ ∀ t. Corecursive t SqlF ⇒ t
-null = embed NullLiteral
+null ∷ ∀ t. Corecursive t (SqlF EJsonF) ⇒ t
+null = embed $ Literal Null
 
-int ∷ ∀ t. Corecursive t SqlF ⇒ Int → t
-int i = embed $ IntLiteral i
+int ∷ ∀ t. Corecursive t (SqlF EJsonF) ⇒ Int → t
+int i = embed $ Literal $ Integer i
 
-num ∷ ∀ t. Corecursive t SqlF ⇒ Number → t
-num i = embed $ FloatLiteral i
+num ∷ ∀ t. Corecursive t (SqlF EJsonF) ⇒ Number → t
+num i = embed $ Literal $ Decimal $ HN.fromNumber i
 
-string ∷ ∀ t. Corecursive t SqlF ⇒ String → t
-string s = embed $ StringLiteral s
+string ∷ ∀ t. Corecursive t (SqlF EJsonF) ⇒ String → t
+string s = embed $ Literal $ String s
 
-unop ∷ ∀ t. Corecursive t SqlF ⇒ UnaryOperator → t → t
+unop ∷ ∀ t. Corecursive t (SqlF EJsonF) ⇒ UnaryOperator → t → t
 unop op expr = embed $ Unop { op, expr }
 
-binop ∷ ∀ t. Corecursive t SqlF ⇒ BinaryOperator → t → t → t
+binop ∷ ∀ t. Corecursive t (SqlF EJsonF) ⇒ BinaryOperator → t → t → t
 binop op lhs rhs = embed $ Binop { op, lhs, rhs }
 
-set ∷ ∀ t f. (Corecursive t SqlF, F.Foldable f) ⇒ f t → t
+set ∷ ∀ t f. (Corecursive t (SqlF EJsonF), F.Foldable f) ⇒ f t → t
 set l = embed $ SetLiteral $ L.fromFoldable l
 
-array ∷ ∀ t f. (Corecursive t SqlF, F.Foldable f) ⇒ f t → t
-array l = embed $ ArrayLiteral $ L.fromFoldable l
+array ∷ ∀ t f. (Corecursive t (SqlF EJsonF), F.Foldable f) ⇒ f t → t
+array l = embed $ Literal $ Array $ Arr.fromFoldable l
 
-splice ∷ ∀ t. Corecursive t SqlF ⇒ Maybe t → t
+map_ ∷ ∀ t. (Corecursive t (SqlF EJsonF), Ord t) ⇒ Map.Map t t → t
+map_ m = embed $ Literal $ Map $ Arr.fromFoldable $ Map.toList m
+
+splice ∷ ∀ t. Corecursive t (SqlF EJsonF) ⇒ Maybe t → t
 splice m = embed $ Splice m
 
-ident ∷ ∀ t. Corecursive t SqlF ⇒ String → t
+ident ∷ ∀ t. Corecursive t (SqlF EJsonF) ⇒ String → t
 ident i = embed $ Ident i
 
-match ∷ ∀ t. Corecursive t SqlF ⇒ t → L.List (Case t) → Maybe t → t
+match ∷ ∀ t. Corecursive t (SqlF EJsonF) ⇒ t → L.List (Case t) → Maybe t → t
 match expr cases else_ = embed $ Match { expr, cases, else_ }
 
-switch ∷ ∀ t. Corecursive t SqlF ⇒ L.List (Case t) → Maybe t → t
+switch ∷ ∀ t. Corecursive t (SqlF EJsonF) ⇒ L.List (Case t) → Maybe t → t
 switch cases else_ = embed $ Switch { cases, else_ }
 
-let_ ∷ ∀ t. Corecursive t SqlF ⇒ String → t → t → t
+let_ ∷ ∀ t. Corecursive t (SqlF EJsonF) ⇒ String → t → t → t
 let_ id bindTo in_ = embed $ Let { ident: id, bindTo, in_ }
 
-invokeFunction ∷ ∀ t. Corecursive t SqlF ⇒ String → L.List t → t
+invokeFunction ∷ ∀ t. Corecursive t (SqlF EJsonF) ⇒ String → L.List t → t
 invokeFunction name args = embed $ InvokeFunction {name, args}
 
 -- when (bool true) # then (num 1.0) :P
@@ -67,7 +74,7 @@ then_ f t = f t
 
 select
   ∷ ∀ t f
-  . (Corecursive t SqlF, F.Foldable f)
+  . (Corecursive t (SqlF EJsonF), F.Foldable f)
   ⇒ Boolean
   → f (Projection t)
   → Maybe (Relation t)
@@ -99,7 +106,7 @@ groupBy f = GroupBy { keys: L.fromFoldable f, having: Nothing }
 having ∷ ∀ t. t → GroupBy t → GroupBy t
 having t (GroupBy r) = GroupBy r{ having = Just t }
 
-buildSelect ∷ ∀ t. Corecursive t SqlF ⇒ (SelectR t → SelectR t) → t
+buildSelect ∷ ∀ t. Corecursive t (SqlF EJsonF) ⇒ (SelectR t → SelectR t) → t
 buildSelect f =
   embed $ Select $ f { isDistinct: false
                      , projections: L.Nil
@@ -109,5 +116,5 @@ buildSelect f =
                      , orderBy: Nothing
                      }
 
-pars ∷ ∀ t. Corecursive t SqlF ⇒ t → t
+pars ∷ ∀ t. Corecursive t (SqlF EJsonF) ⇒ t → t
 pars = embed ∘ Parens
