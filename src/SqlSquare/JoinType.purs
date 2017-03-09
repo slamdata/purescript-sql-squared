@@ -10,10 +10,10 @@ data JoinType
 
 printJoinType ∷ JoinType → String
 printJoinType = case _ of
-  LeftJoin → "left join"
-  RightJoin → "right join"
-  FullJoin → "full join"
-  InnerJoin → "inner join"
+  LeftJoin → "LEFT JOIN"
+  RightJoin → "RIGHT JOIN"
+  FullJoin → "FULL JOIN"
+  InnerJoin → "INNER JOIN"
 
 derive instance eqJoinType ∷ Eq JoinType
 derive instance ordJoinType ∷ Ord JoinType

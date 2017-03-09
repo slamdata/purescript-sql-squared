@@ -27,4 +27,4 @@ instance traversableProjection ∷ T.Traversable Projection where
   sequence = T.sequenceDefault
 
 printProjection ∷ Algebra Projection String
-printProjection (Projection { expr, alias }) = expr <> F.foldMap (" as " <> _) alias
+printProjection (Projection { expr, alias }) = expr <> F.foldMap (" AS " <> _) alias

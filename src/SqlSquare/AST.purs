@@ -385,8 +385,8 @@ printF printLiteralF = case _ of
   Binop {lhs, rhs, op} → case op of
     IfUndefined → lhs <> " ?? " <> rhs
     Range → lhs <> " .. " <> rhs
-    Or → lhs <> " or " <> rhs
-    And → lhs <> " and " <> rhs
+    Or → lhs <> " OR " <> rhs
+    And → lhs <> " AND " <> rhs
     Eq → lhs <> " = " <> rhs
     Neq → lhs <> " <> " <> rhs
     Ge → lhs <> " >= " <> rhs
@@ -400,24 +400,24 @@ printF printLiteralF = case _ of
     Div → lhs <> " / " <> rhs
     Mod → lhs <> " % " <> rhs
     Pow → lhs <> " ^ " <> rhs
-    In → lhs <> " in " <> rhs
+    In → lhs <> " IN " <> rhs
     FieldDeref → lhs <> "." <> rhs
     IndexDeref → lhs <> "[" <> rhs <> "]"
-    Limit → lhs <> " limit " <> rhs
-    Offset → lhs <> " offset " <> rhs
-    Sample → lhs <> " sample " <> rhs
-    Union → lhs <> " union " <> rhs
-    UnionAll → lhs <> " union all " <> rhs
-    Intersect → lhs <> " intersect " <> rhs
-    IntersectAll → lhs <> " intersect all " <> rhs
-    Except → lhs <> " except " <> rhs
+    Limit → lhs <> " LIMIT " <> rhs
+    Offset → lhs <> " OFFSET " <> rhs
+    Sample → lhs <> " SAMPLE " <> rhs
+    Union → lhs <> " UNION " <> rhs
+    UnionAll → lhs <> " UNION ALL " <> rhs
+    Intersect → lhs <> " INTERSECT " <> rhs
+    IntersectAll → lhs <> " INTERSECT ALL " <> rhs
+    Except → lhs <> " EXCEPT " <> rhs
     UnshiftMap → "{" <> lhs <> ": " <> rhs <> "...}"
   Unop {expr, op} → case op of
-    Not → "not " <> expr
-    Exists → "exists " <> expr
+    Not → "NOT " <> expr
+    Exists → "EXISTS " <> expr
     Positive → "+" <> expr
     Negative → "-" <> expr
-    Distinct → "distinct " <> expr
+    Distinct → "DISTINCT " <> expr
     FlattenMapKeys → expr <> "{*: }"
     FlattenMapValues → expr <> "{*}"
     ShiftMapKeys → expr <> "{_: }"
@@ -432,27 +432,27 @@ printF printLiteralF = case _ of
   InvokeFunction {name, args} →
     name <> "(" <> F.intercalate "," args <> ")"
   Match { expr, cases, else_ } →
-    "case "
+    "CASE "
     <> expr
     <> F.intercalate " " (map printCase cases)
-    <> F.foldMap (" else " <> _) else_
+    <> F.foldMap (" ELSE " <> _) else_
   Switch { cases, else_ } →
-    "case "
+    "CASE "
     <> F.intercalate " " (map printCase cases)
-    <> F.foldMap (" else " <> _) else_
+    <> F.foldMap (" ELSE " <> _) else_
   Let { ident, bindTo, in_ } →
     ident <> " := " <> bindTo <> "; " <> in_
   Vari s →
     ":" <> s
   Select { isDistinct, projections, relations, filter, groupBy, orderBy } →
-    "select "
-    <> (if isDistinct then "distinct " else "")
+    "SELECT "
+    <> (if isDistinct then "DISTINCT " else "")
     <> (F.intercalate ", " $ map printProjection projections)
     <> (relations # F.foldMap \rs →
-         " from " <> printRelation rs)
-    <> (filter # F.foldMap \f → " where " <> f)
-    <> (groupBy # F.foldMap \gb → " group by " <> printGroupBy gb)
-    <> (orderBy # F.foldMap \ob → " order by " <> printOrderBy ob)
+         " FROM " <> printRelation rs)
+    <> (filter # F.foldMap \f → " WHERE " <> f)
+    <> (groupBy # F.foldMap \gb → " GROUP BY " <> printGroupBy gb)
+    <> (orderBy # F.foldMap \ob → " ORDER BY " <> printOrderBy ob)
   Parens t →
     "(" <> t <> ")"
 

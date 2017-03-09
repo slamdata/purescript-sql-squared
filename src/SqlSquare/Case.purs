@@ -24,4 +24,4 @@ instance traversableCase ∷ T.Traversable Case where
   sequence = T.sequenceDefault
 
 printCase ∷ Algebra Case String
-printCase (Case { cond, expr }) = " when " <> cond <> " then " <> expr
+printCase (Case { cond, expr }) = " WHEN " <> cond <> " THEN " <> expr

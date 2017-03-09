@@ -89,16 +89,16 @@ instance traversableRelation ∷ T.Traversable Relation where
 printRelation ∷ Algebra Relation String
 printRelation = case _ of
   ExprRelation {expr, aliasName} →
-    "(" <> expr <> ") as " <> aliasName
+    "(" <> expr <> ") AS " <> aliasName
   VariRelation { vari, alias} →
-    vari <> F.foldMap (" as " <> _) alias
+    vari <> F.foldMap (" AS " <> _) alias
   TableRelation { tablePath, alias } →
     "`"
     <> either unsafePrintPath unsafePrintPath tablePath
     <> "`"
-    <> F.foldMap (" as " <> _) alias
+    <> F.foldMap (" AS " <> _) alias
   IdentRelation { ident, alias } →
-    ident <> F.foldMap (\x → " as `" <> x <> "`") alias
+    ident <> F.foldMap (\x → " AS `" <> x <> "`") alias
   JoinRelation { left, right, joinType, clause } →
     printRelation left
     <> " "

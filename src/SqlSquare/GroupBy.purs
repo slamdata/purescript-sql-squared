@@ -28,4 +28,4 @@ instance traversableGroupBy ∷ T.Traversable GroupBy where
 
 printGroupBy ∷ Algebra GroupBy String
 printGroupBy (GroupBy { keys, having }) =
-  F.intercalate ", " keys <> F.foldMap (" having " <> _) having
+  F.intercalate ", " keys <> F.foldMap (" HAVING " <> _) having
