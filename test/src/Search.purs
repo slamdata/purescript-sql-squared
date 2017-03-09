@@ -394,12 +394,12 @@ searchQueries =
 
 expectedOutput ∷ L.List String
 expectedOutput =
-  """select distinct *.`bar`, *.`foo` from `/mongo/testDb/patients` where (((search(*.`bar`,"^.*ba.*$",true)) or ((search(*.`foo`,"^.*ba.*$",true))) or ((search(*.`bar`.`valid`,"^.*ba.*$",true))) or ((search(*.`bar`.`value`,"^.*ba.*$",true))) or ((search(*.`foo`[*],"^.*ba.*$",true))) or ((search(*.`foo`[*],"^.*ba.*$",true)))))"""
-  : """select distinct *.`bar`, *.`foo` from `/mongo/testDb/patients` where (((search(`foo`[*],"^.*2.*$",true) or (`foo`[*] = 2.0) or (`foo`[*] = 2))))"""
-  : """select *.`bar`, *.`foo` from `/mongo/testDb/patients` where (((LOWER(`bar`) > LOWER("1") or (`bar` > 1.0) or (`bar` > 1))))"""
-  : """select distinct *.`bar`, *.`foo` from `/mongo/testDb/patients` where ((search(*.`bar`,"^.*false.*$",true) or (*.`bar` = false) or (search(*.`foo`,"^.*false.*$",true) or (*.`foo` = false)) or (search(*.`bar`.`valid`,"^.*false.*$",true) or (*.`bar`.`valid` = false)) or (search(*.`bar`.`value`,"^.*false.*$",true) or (*.`bar`.`value` = false)) or (search(*.`foo`[*],"^.*false.*$",true) or (*.`foo`[*] = false)) or (search(*.`foo`[*],"^.*false.*$",true) or (*.`foo`[*] = false))))"""
-  : """select *.`bar`, *.`foo` from `/mongo/testDb/patients` where (((LOWER(`bar`.`valid`) = LOWER("false") or (`bar`.`valid` = false))))"""
-  : """select *.`bar`, *.`foo` from `/mongo/testDb/patients` where ((((search(`non-existing`,"^.*foo.*$",true)))))"""
+  """SELECT DISTINCT *.`bar`, *.`foo` FROM `/mongo/testDb/patients` WHERE (((search(*.`bar`,"^.*ba.*$",true)) OR ((search(*.`foo`,"^.*ba.*$",true))) OR ((search(*.`bar`.`valid`,"^.*ba.*$",true))) OR ((search(*.`bar`.`value`,"^.*ba.*$",true))) OR ((search(*.`foo`[*],"^.*ba.*$",true))) OR ((search(*.`foo`[*],"^.*ba.*$",true)))))"""
+  : """SELECT DISTINCT *.`bar`, *.`foo` FROM `/mongo/testDb/patients` WHERE (((search(`foo`[*],"^.*2.*$",true) OR (`foo`[*] = 2.0) OR (`foo`[*] = 2))))"""
+  : """SELECT *.`bar`, *.`foo` FROM `/mongo/testDb/patients` WHERE (((LOWER(`bar`) > LOWER("1") OR (`bar` > 1.0) OR (`bar` > 1))))"""
+  : """SELECT DISTINCT *.`bar`, *.`foo` FROM `/mongo/testDb/patients` WHERE ((search(*.`bar`,"^.*false.*$",true) OR (*.`bar` = false) OR (search(*.`foo`,"^.*false.*$",true) OR (*.`foo` = false)) OR (search(*.`bar`.`valid`,"^.*false.*$",true) OR (*.`bar`.`valid` = false)) OR (search(*.`bar`.`value`,"^.*false.*$",true) OR (*.`bar`.`value` = false)) OR (search(*.`foo`[*],"^.*false.*$",true) OR (*.`foo`[*] = false)) OR (search(*.`foo`[*],"^.*false.*$",true) OR (*.`foo`[*] = false))))"""
+  : """SELECT *.`bar`, *.`foo` FROM `/mongo/testDb/patients` WHERE (((LOWER(`bar`.`valid`) = LOWER("false") OR (`bar`.`valid` = false))))"""
+  : """SELECT *.`bar`, *.`foo` FROM `/mongo/testDb/patients` WHERE ((((search(`non-existing`,"^.*foo.*$",true)))))"""
   : L.Nil
 
 tablePath ∷ S.FUPath

@@ -29,4 +29,4 @@ instance traversableOrderBy ∷ T.Traversable OrderBy where
 
 printOrderBy ∷ Algebra OrderBy String
 printOrderBy (OrderBy lst) =
-  F.intercalate ", " $ lst <#> \(ot × a) → OT.printOrderType ot <> " " <> a
+  F.intercalate ", " $ lst <#> \(ot × a) → a <> " " <> OT.printOrderType ot
