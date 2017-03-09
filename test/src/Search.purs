@@ -22,6 +22,7 @@ import Data.String as Str
 import Data.String.Regex as RX
 import Data.String.Regex.Flags as RXF
 import Data.String.Regex.Unsafe as URX
+import Data.Json.Extended.Signature as EJ
 
 import Global (readFloat, isNaN)
 
@@ -100,10 +101,10 @@ labelString = case _ of
   SS.Meta l → l
   SS.Common l → l
 
-identOrString ∷ ∀ a. S.SqlF a → Maybe String
+identOrString ∷ ∀ a. (S.SqlF EJ.EJsonF) a → Maybe String
 identOrString = case _ of
   S.Ident s → Just s
-  S.StringLiteral s → Just s
+  S.Literal (EJ.String s) → Just s
   _ → Nothing
 
 valueToString ∷ SS.Value → String
@@ -141,12 +142,12 @@ isTop = case _ of
   NotTopField → false
   _ → true
 
-topFieldF ∷ Algebra S.SqlF TopFieldMark
+topFieldF ∷ Algebra (S.SqlF EJ.EJsonF) TopFieldMark
 topFieldF = case _ of
   S.Splice Nothing → Init
-  S.StringLiteral _ → TopField
   S.Ident _ → TopField
-  S.IntLiteral _ → TopField
+  S.Literal (EJ.Integer _) → TopField
+  S.Literal (EJ.String _) → TopField
   S.Binop { op: S.FieldDeref, lhs: Init, rhs: TopField } → TopField
   S.Binop { op: S.IndexDeref, lhs: Init, rhs: TopField } → TopField
   _ → NotTopField
@@ -158,7 +159,7 @@ isTopField = isTop ∘ cata topFieldF
 -- Flattening all array derefs ( `foo[1]` → `foo[*]` )
 --------------------------------------------------------------------------------
 
-flattenIndexF ∷ ∀ t. Transform t S.SqlF S.SqlF
+flattenIndexF ∷ ∀ t. Transform t (S.SqlF EJ.EJsonF) (S.SqlF EJ.EJsonF)
 flattenIndexF = case _ of
   S.Binop { op: S.IndexDeref, lhs } → S.Unop { op: S.FlattenArrayValues, expr: lhs }
   s → s
@@ -170,11 +171,11 @@ flattenIndex = transAna flattenIndexF
 -- Searching for flatten values ({*}, [*])
 --------------------------------------------------------------------------------
 
-needDistinctF ∷ Algebra S.SqlF Boolean
+needDistinctF ∷ Algebra (S.SqlF EJ.EJsonF) Boolean
 needDistinctF = case _ of
   S.SetLiteral ns → F.or ns
-  S.ArrayLiteral ns → F.or ns
-  S.MapLiteral tpls → F.any (\(a × b) → a || b) tpls
+  S.Literal (EJ.Array ns) → F.or ns
+  S.Literal (EJ.Map tpls) → F.any (\(a × b) → a || b) tpls
   S.Splice Nothing → false
   S.Splice (Just a) → a
   S.Binop { lhs, rhs } → lhs || rhs
@@ -189,11 +190,7 @@ needDistinctF = case _ of
     F.any (\(S.Case { cond, expr }) → cond || expr) cases || fromMaybe false else_
   S.Let { bindTo, in_ } →
     bindTo || in_
-  S.IntLiteral _ → false
-  S.StringLiteral _ → false
-  S.FloatLiteral _ → false
-  S.NullLiteral → false
-  S.BoolLiteral _ → false
+  S.Literal _ → false
   S.Vari _ → false
   S.Parens a → a
   S.Select { projections, filter } →
@@ -221,11 +218,11 @@ termToSql fs (SS.Term { include, predicate, labels})
       <$> (if L.null labels then fs else pure $ labelsToField labels)
 
 
-labelToFieldF ∷ Coalgebra S.SqlF (L.List String)
+labelToFieldF ∷ Coalgebra (S.SqlF EJ.EJsonF) (L.List String)
 labelToFieldF = case _ of
   L.Nil → S.Splice Nothing
   hd : L.Nil → case toInt hd of
-    Just i → S.IntLiteral i
+    Just i → S.Literal (EJ.Integer i)
     Nothing → S.Ident hd
   hd : tl → case toInt hd of
     Just i → S.Binop { op: S.IndexDeref, lhs: tl, rhs: pure hd }

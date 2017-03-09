@@ -1,4 +1,4 @@
--- | An example of using `purescript-sqlsquare` library.
+-- | An example of using `purescript-sqlsquare` library
 -- | Having an array of `Json`s construct a list of Sql² projections
 module Test.Argonaut where
 
@@ -13,6 +13,7 @@ import Data.List as L
 import Data.Maybe (Maybe(..))
 import Data.Set as Set
 import Data.Tuple (Tuple, fst)
+import Data.Json.Extended.Signature (EJsonF(..))
 
 import SqlSquare as S
 import SqlSquare.Utils ((×), (∘), (⋙))
@@ -26,10 +27,10 @@ import Partial.Unsafe (unsafePartial)
 
 data UnfoldableJC = JC JCursor | S String | I Int
 
-jcCoalgebra ∷ Coalgebra S.SqlF UnfoldableJC
+jcCoalgebra ∷ Coalgebra (S.SqlF EJsonF) UnfoldableJC
 jcCoalgebra = case _ of
   S s → S.Ident s
-  I i → S.IntLiteral i
+  I i → S.Literal (Integer  i)
   JC cursor → case cursor of
     JCursorTop → S.Splice Nothing
     JIndex i c → S.Binop { op: S.IndexDeref, lhs: JC c, rhs: I i }
@@ -42,7 +43,7 @@ fields ∷ JS.JArray → L.List S.Sql
 fields arr =
   map jcursorToSql $ L.fromFoldable $ F.foldMap (Set.fromFoldable ∘ map fst) $ map JS.toPrims arr
 
-allParentsF ∷ ElgotAlgebra (Tuple S.Sql) S.SqlF (L.List S.Sql)
+allParentsF ∷ ElgotAlgebra (Tuple S.Sql) (S.SqlF EJsonF) (L.List S.Sql)
 allParentsF (parent × sqlF) = case sqlF of
   S.Splice (Just ps) → ps
   S.Unop { op: S.FlattenArrayValues, expr } → parent : expr

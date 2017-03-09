@@ -24,18 +24,14 @@ module SqlSquare.AST
 
 import Prelude
 
-import Data.Bifunctor (bimap)
-import Data.Eq (class Eq1)
+import Data.Eq (class Eq1, eq1)
 import Data.Foldable as F
 import Data.Traversable as T
 import Data.Functor.Mu (Mu)
 import Data.List as L
 import Data.Maybe (Maybe(..))
 import Data.Monoid (mempty)
-import Data.Ord (class Ord1)
-import Data.String.Regex as RX
-import Data.String.Regex.Flags as RXF
-import Data.String.Regex.Unsafe as URX
+import Data.Ord (class Ord1, compare1)
 
 import Data.Json.Extended.Signature (EJsonF, renderEJsonF)
 
@@ -50,9 +46,7 @@ import SqlSquare.OrderBy (OrderBy(..), printOrderBy)
 import SqlSquare.Projection (Projection(..), printProjection)
 import SqlSquare.Relation (Relation(..), printRelation, FUPath, JoinRelR, ExprRelR, TableRelR, VariRelR, IdentRelR)
 
-import Matryoshka (class Recursive, Algebra, cata, transParaT, project)
-
-import Debug.Trace as DT
+import Matryoshka (Algebra, cata)
 
 type BinopR a =
   { lhs ∷ a
@@ -114,10 +108,104 @@ data SqlF literal a
 derive instance eqSqlF ∷ (Eq a, Eq (l a)) ⇒ Eq (SqlF l a)
 derive instance ordSqlF ∷ (Ord a, Ord (l a)) ⇒ Ord (SqlF l a)
 
---instance eq1SqlF ∷ Eq1 l ⇒ Eq1 (SqlF l) where
+instance eq1SqlF ∷ Eq1 l ⇒ Eq1 (SqlF l) where
+  eq1 (Literal l) (Literal ll) = eq1 l ll
+  eq1 (Splice a) (Splice aa) = eq a aa
+  eq1 (Binop r) (Binop rr) =
+    r.lhs == rr.lhs
+    && r.rhs == rr.rhs
+    && r.op == rr.op
+  eq1 (Unop r) (Unop rr) =
+    r.expr == rr.expr
+    && r.op == rr.op
+  eq1 (Ident s) (Ident ss) =
+    s == ss
+  eq1 (InvokeFunction r) (InvokeFunction rr) =
+    r.name == rr.name
+    && r.args == rr.args
+  eq1 (Match r) (Match rr) =
+    r.else_ == rr.else_
+    && r.cases == rr.cases
+    && r.expr == rr.expr
+  eq1 (Switch r) (Switch rr) =
+    r.cases == rr.cases
+    && r.else_ == rr.else_
+  eq1 (Let r) (Let rr) =
+    r.in_ == r.in_
+    && r.bindTo == rr.bindTo
+    && r.ident == rr.ident
+  eq1 (Vari v) (Vari vv) =
+    v == vv
+  eq1 (Parens a) (Parens aa) =
+    a == aa
+  eq1 (Select r) (Select rr) =
+    r.isDistinct == rr.isDistinct
+    && r.projections == rr.projections
+    && r.relations == rr.relations
+    && r.filter == rr.filter
+    && r.groupBy == rr.groupBy
+    && r.orderBy == rr.orderBy
+  eq1 _ _ = false
 
---instance ord1SqlF ∷ Ord (l a) ⇒ Ord1 (SqlF l) where
---  compare1 = compare
+instance ord1SqlF ∷ Ord1 l ⇒ Ord1 (SqlF l) where
+  compare1 (Literal l) (Literal ll) = compare1 l ll
+  compare1 (Literal _) _ = LT
+  compare1 _ (Literal _) = GT
+  compare1 (SetLiteral s) (SetLiteral ss) = compare s ss
+  compare1 (SetLiteral _) _ = LT
+  compare1 _ (SetLiteral _) = GT
+  compare1 (Splice a) (Splice aa) = compare a aa
+  compare1 (Splice _) _ = LT
+  compare1 _ (Splice _) = GT
+  compare1 (Binop r) (Binop rr) =
+    compare r.lhs rr.lhs
+    <> compare r.rhs rr.rhs
+    <> compare r.op rr.op
+  compare1 (Binop _) _ = LT
+  compare1 _ (Binop _) = GT
+  compare1 (Unop r) (Unop rr) =
+    compare r.op rr.op
+    <> compare r.expr rr.expr
+  compare1 (Unop _) _ = LT
+  compare1 _ (Unop _) = GT
+  compare1 (Ident s) (Ident ss) = compare s ss
+  compare1 (Ident s) _ = LT
+  compare1 _ (Ident s) = GT
+  compare1 (InvokeFunction r) (InvokeFunction rr) =
+    compare r.name rr.name
+    <> compare r.args rr.args
+  compare1 (InvokeFunction _) _ = LT
+  compare1 _ (InvokeFunction _) = GT
+  compare1 (Match r) (Match rr) =
+    compare r.else_ rr.else_
+    <> compare r.expr rr.expr
+    <> compare r.cases rr.cases
+  compare1 (Match _) _ = LT
+  compare1 _ (Match _) = GT
+  compare1 (Switch r) (Switch rr) =
+    compare r.else_ rr.else_
+    <> compare r.cases rr.cases
+  compare1 (Switch _) _ = LT
+  compare1 _ (Switch _) = GT
+  compare1 (Let r) (Let rr) =
+    compare r.in_ rr.in_
+    <> compare r.bindTo rr.bindTo
+    <> compare r.ident rr.ident
+  compare1 (Let _) _ = LT
+  compare1 _ (Let _) = GT
+  compare1 (Vari v) (Vari vv) = compare v vv
+  compare1 (Vari _) _ = LT
+  compare1 _ (Vari _) = GT
+  compare1 (Parens a) (Parens aa) = compare a aa
+  compare1 (Parens a) _ = LT
+  compare1 _ (Parens _) = GT
+  compare1 (Select r) (Select rr) =
+    compare r.isDistinct rr.isDistinct
+    <> compare r.projections rr.projections
+    <> compare r.filter rr.filter
+    <> compare r.relations rr.relations
+    <> compare r.orderBy rr.orderBy
+    <> compare r.groupBy rr.groupBy
 
 instance functorAST ∷ Functor l ⇒ Functor (SqlF l) where
   map f = case _ of
