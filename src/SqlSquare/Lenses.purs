@@ -137,17 +137,17 @@ _tablePath = lens _.tablePath _{ tablePath = _ }
 
 
 _SetLiteral
-  ∷ ∀ t
-  . (Recursive t (S.SqlF EJ.EJsonF), Corecursive t (S.SqlF EJ.EJsonF))
+  ∷ ∀ t f
+  . (Recursive t (S.SqlF f), Corecursive t (S.SqlF f))
   ⇒ Prism' t (L.List t)
 _SetLiteral = prism' (embed ∘ S.SetLiteral) $ project ⋙ case _ of
   S.SetLiteral lst → M.Just lst
   _ → M.Nothing
 
 _Literal
-  ∷ ∀ t
-  . (Recursive t (S.SqlF EJ.EJsonF), Corecursive t (S.SqlF EJ.EJsonF))
-  ⇒ Prism' t (EJ.EJsonF t)
+  ∷ ∀ t f
+  . (Recursive t (S.SqlF f), Corecursive t (S.SqlF f))
+  ⇒ Prism' t (f t)
 _Literal = prism' (embed ∘ S.Literal) $ project ⋙ case _ of
   S.Literal js → M.Just js
   _ → M.Nothing
@@ -169,64 +169,64 @@ _MapLiteral = prism' (embed ∘ S.Literal ∘ EJ.Map) $ project ⋙ case _ of
   _ → M.Nothing
 
 _Splice
-  ∷ ∀ t
-  . (Recursive t (S.SqlF EJ.EJsonF), Corecursive t (S.SqlF EJ.EJsonF))
+  ∷ ∀ t f
+  . (Recursive t (S.SqlF f), Corecursive t (S.SqlF f))
   ⇒ Prism' t (M.Maybe t)
 _Splice = prism' (embed ∘ S.Splice) $ project ⋙ case _ of
   S.Splice m → M.Just m
   _ → M.Nothing
 
 _Binop
-  ∷ ∀ t
-  . (Recursive t (S.SqlF EJ.EJsonF), Corecursive t (S.SqlF EJ.EJsonF))
+  ∷ ∀ t f
+  . (Recursive t (S.SqlF f), Corecursive t (S.SqlF f))
   ⇒ Prism' t (S.BinopR t)
 _Binop = prism' (embed ∘ S.Binop) $ project ⋙ case _ of
   S.Binop b → M.Just b
   _ → M.Nothing
 
 _Unop
-  ∷ ∀ t
-  . (Recursive t (S.SqlF EJ.EJsonF), Corecursive t (S.SqlF EJ.EJsonF))
+  ∷ ∀ t f
+  . (Recursive t (S.SqlF f), Corecursive t (S.SqlF f))
   ⇒ Prism' t (S.UnopR t)
 _Unop = prism' (embed ∘ S.Unop) $ project ⋙ case _ of
   S.Unop r → M.Just r
   _ → M.Nothing
 
 _Ident
-  ∷ ∀ t
-  . (Recursive t (S.SqlF EJ.EJsonF), Corecursive t (S.SqlF EJ.EJsonF))
+  ∷ ∀ t f
+  . (Recursive t (S.SqlF f), Corecursive t (S.SqlF f))
   ⇒ Prism' t String
 _Ident = prism' (embed ∘ S.Ident) $ project ⋙ case _ of
   S.Ident s → M.Just s
   _ → M.Nothing
 
 _InvokeFunction
-  ∷ ∀ t
-  . (Recursive t (S.SqlF EJ.EJsonF), Corecursive t (S.SqlF EJ.EJsonF))
+  ∷ ∀ t f
+  . (Recursive t (S.SqlF f), Corecursive t (S.SqlF f))
   ⇒ Prism' t (S.InvokeFunctionR t)
 _InvokeFunction = prism' (embed ∘ S.InvokeFunction) $ project ⋙ case _ of
   S.InvokeFunction r → M.Just r
   _ → M.Nothing
 
 _Match
-  ∷ ∀ t
-  . (Recursive t (S.SqlF EJ.EJsonF), Corecursive t (S.SqlF EJ.EJsonF))
+  ∷ ∀ t f
+  . (Recursive t (S.SqlF f), Corecursive t (S.SqlF f))
   ⇒ Prism' t (S.MatchR t)
 _Match = prism' (embed ∘ S.Match) $ project ⋙ case _ of
   S.Match r → M.Just r
   _ → M.Nothing
 
 _Switch
-  ∷ ∀ t
-  . (Recursive t (S.SqlF EJ.EJsonF), Corecursive t (S.SqlF EJ.EJsonF))
+  ∷ ∀ t f
+  . (Recursive t (S.SqlF f), Corecursive t (S.SqlF f))
   ⇒ Prism' t (S.SwitchR t)
 _Switch = prism' (embed ∘ S.Switch) $ project ⋙ case _ of
   S.Switch r → M.Just r
   _ → M.Nothing
 
 _Let
-  ∷ ∀ t
-  . (Recursive t (S.SqlF EJ.EJsonF), Corecursive t (S.SqlF EJ.EJsonF))
+  ∷ ∀ t f
+  . (Recursive t (S.SqlF f), Corecursive t (S.SqlF f))
   ⇒ Prism' t (S.LetR t)
 _Let = prism' (embed ∘ S.Let) $ project ⋙ case _ of
   S.Let r → M.Just r
@@ -273,22 +273,25 @@ _BoolLiteral = prism' (embed ∘ S.Literal ∘ EJ.Boolean) $ project ⋙ case _ 
   _ → M.Nothing
 
 _Vari
-  ∷ ∀ t
-  . (Recursive t (S.SqlF EJ.EJsonF), Corecursive t (S.SqlF EJ.EJsonF))
+  ∷ ∀ t f
+  . (Recursive t (S.SqlF f), Corecursive t (S.SqlF f))
   ⇒ Prism' t String
 _Vari = prism' (embed ∘ S.Vari) $ project ⋙ case _ of
   S.Vari r → M.Just r
   _ → M.Nothing
 
 _Select
-  ∷ ∀ t
-  . (Recursive t (S.SqlF EJ.EJsonF), Corecursive t (S.SqlF EJ.EJsonF))
+  ∷ ∀ t f
+  . (Recursive t (S.SqlF f), Corecursive t (S.SqlF f))
   ⇒ Prism' t (S.SelectR t)
 _Select = prism' (embed ∘ S.Select) $ project ⋙ case _ of
   S.Select r → M.Just r
   _ → M.Nothing
 
-_Parens ∷ ∀ t. (Recursive t (S.SqlF EJ.EJsonF), Corecursive t (S.SqlF EJ.EJsonF)) ⇒ Prism' t t
+_Parens
+  ∷ ∀ t f
+  . (Recursive t (S.SqlF f), Corecursive t (S.SqlF f))
+  ⇒ Prism' t t
 _Parens = prism' (embed ∘ S.Parens) $ project ⋙ case _ of
   S.Parens t → M.Just t
   _ → M.Nothing
