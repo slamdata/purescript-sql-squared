@@ -3,6 +3,7 @@ module SqlSquare.Constructors where
 import Prelude
 
 import Data.Array as Arr
+import Data.DateTime as DT
 import Data.Json.Extended.Signature (EJsonF(..))
 import Data.Foldable as F
 import Data.HugeNum as HN
@@ -31,6 +32,15 @@ num i = embed $ Literal $ Decimal $ HN.fromNumber i
 
 string ∷ ∀ t. Corecursive t (SqlF EJsonF) ⇒ String → t
 string s = embed $ Literal $ String s
+
+date ∷ ∀ t. Corecursive t (SqlF EJsonF) ⇒ DT.Date → t
+date d = embed $ Literal $ Date d
+
+time ∷ ∀ t. Corecursive t (SqlF EJsonF) ⇒ DT.Time → t
+time t = embed $ Literal $ Time t
+
+timestamp ∷ ∀ t. Corecursive t (SqlF EJsonF) ⇒ DT.DateTime → t
+timestamp dt = embed $ Literal $ Timestamp dt
 
 unop ∷ ∀ t f. Corecursive t (SqlF f) ⇒ UnaryOperator → t → t
 unop op expr = embed $ Unop { op, expr }
@@ -65,7 +75,7 @@ let_ id bindTo in_ = embed $ Let { ident: id, bindTo, in_ }
 invokeFunction ∷ ∀ t f. Corecursive t (SqlF f) ⇒ String → L.List t → t
 invokeFunction name args = embed $ InvokeFunction {name, args}
 
--- when (bool true) # then (num 1.0) :P
+-- when (bool true) # then_ (num 1.0) :P
 when ∷ ∀ t. t → (t → Case t)
 when cond = Case ∘ { cond, expr: _ }
 
