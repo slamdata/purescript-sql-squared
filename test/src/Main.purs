@@ -1,24 +1,26 @@
 module Test.Main where
 
 import Prelude
+
+import Control.Monad.Aff.AVar (AVAR)
 import Control.Monad.Eff (Eff)
+import Control.Monad.Eff.Console (CONSOLE)
 
-import Data.List (List)
-import Data.Functor.Mu (Mu)
-import Debug.Trace (traceAnyA)
-import SqlSquare.AST as S
-import Matryoshka (class Corecursive, embed, cata)
+import Test.Unit.Main (runTest)
+import Test.Unit.Console (TESTOUTPUT)
 
-num ∷ ∀ t. Corecursive t S.AST ⇒ Number → t
-num n = embed (S.FloatLiteral n)
+import Test.Constructors as Constructors
+import Test.Argonaut as Argonaut
+import Test.Search as Search
 
-invokeFunction ∷ ∀ t. Corecursive t S.AST ⇒ String → List t → t
-invokeFunction name args = embed (S.InvokeFunction { name, args })
+type Effects =
+  ( testOutput ∷ TESTOUTPUT
+  , avar ∷ AVAR
+  , console ∷ CONSOLE
+  )
 
-someExpr ∷ ∀ t. Corecursive t S.AST ⇒ t
-someExpr = invokeFunction "foo" $ pure $ num 12.0
-
-main ∷ ∀ e. Eff e Unit
-main = do
-  traceAnyA (someExpr ∷ Mu S.AST)
-  traceAnyA $ cata S.print (someExpr ∷ Mu S.AST)
+main ∷ Eff Effects Unit
+main = runTest do
+  Constructors.testSuite
+  Argonaut.testSuite
+  Search.testSuite

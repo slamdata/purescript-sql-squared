@@ -1,9 +1,13 @@
 {
-  "name": "purescript-sqlsquare",
-  "license": "Apache-2.0",
-  "dependencies": {
-    "pulp": "^10.0.1",
-    "purescript": "^0.10.7",
-    "purescript-psa": "^0.4.0"
-  }
+    "name": "purescript-sqlsquare",
+    "license": "Apache-2.0",
+    "scripts": {
+        "build": "pulp build -- --censor-lib --strict --stash",
+        "test": "pulp test -- --censor-lib --strict --stash"
+    },
+    "dependencies": {
+        "pulp": "^10.0.1",
+        "purescript": "^0.10.7",
+        "purescript-psa": "^0.4.0"
+    }
 }
