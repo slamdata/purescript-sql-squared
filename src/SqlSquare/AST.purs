@@ -24,6 +24,8 @@ module SqlSquare.AST
 
 import Prelude
 
+import Data.Argonaut as J
+import Data.Either as E
 import Data.Eq (class Eq1, eq1)
 import Data.Foldable as F
 import Data.Traversable as T
@@ -33,20 +35,46 @@ import Data.Maybe (Maybe(..))
 import Data.Monoid (mempty)
 import Data.Ord (class Ord1, compare1)
 
-import Data.Json.Extended.Signature (EJsonF, renderEJsonF)
+import Data.Json.Extended.Signature (EJsonF, renderEJsonF, encodeJsonEJsonF, decodeJsonEJsonF)
 
 import SqlSquare.Utils (type (×), (×), (∘), (⋙))
 import SqlSquare.OrderType as OT
 import SqlSquare.JoinType as JT
 import SqlSquare.BinaryOperator (BinaryOperator(..))
 import SqlSquare.UnaryOperator (UnaryOperator(..))
-import SqlSquare.GroupBy (GroupBy(..), printGroupBy)
-import SqlSquare.Case (Case(..), printCase)
-import SqlSquare.OrderBy (OrderBy(..), printOrderBy)
-import SqlSquare.Projection (Projection(..), printProjection)
-import SqlSquare.Relation (Relation(..), printRelation, FUPath, JoinRelR, ExprRelR, TableRelR, VariRelR, IdentRelR)
+import SqlSquare.GroupBy
+  ( GroupBy(..)
+  , printGroupBy
+  , encodeJsonGroupBy
+  , decodeJsonGroupBy)
+import SqlSquare.Case
+  ( Case(..)
+  , printCase
+  , encodeJsonCase
+  , decodeJsonCase)
+import SqlSquare.OrderBy
+  ( OrderBy(..)
+  , printOrderBy
+  , encodeJsonOrderBy
+  , decodeJsonOrderBy)
+import SqlSquare.Projection
+  ( Projection(..)
+  , printProjection
+  , encodeJsonProjection
+  , decodeJsonProjection)
+import SqlSquare.Relation
+  ( Relation(..)
+  , printRelation
+  , FUPath
+  , JoinRelR
+  , ExprRelR
+  , TableRelR
+  , VariRelR
+  , IdentRelR
+  , encodeJsonRelation
+  , decodeJsonRelation)
 
-import Matryoshka (Algebra, cata)
+import Matryoshka (Algebra, cata, CoalgebraM, anaM)
 
 type BinopR a =
   { lhs ∷ a
@@ -460,3 +488,168 @@ type Sql = Mu (SqlF EJsonF)
 
 print ∷ Sql → String
 print = cata (printF renderEJsonF)
+
+encodeJsonSqlF ∷ ∀ l. Algebra l J.Json → Algebra (SqlF l) J.Json
+encodeJsonSqlF alg = case _ of
+  SetLiteral lst →
+    "tag" J.:= "set literal"
+    J.~> "value" J.:= lst
+    J.~> J.jsonEmptyObject
+  Literal l →
+    "tag" J.:= "literal"
+    J.~> "value" J.:= alg l
+    J.~> J.jsonEmptyObject
+  Splice a →
+    "tag" J.:= "splice"
+    J.~> "value" J.:= a
+    J.~> J.jsonEmptyObject
+  Binop { lhs, rhs, op } →
+    "tag" J.:= "binop"
+    J.~> "lhs" J.:= lhs
+    J.~> "rhs" J.:= rhs
+    J.~> "op" J.:= op
+    J.~> J.jsonEmptyObject
+  Unop { expr, op } →
+    "tag" J.:= "unop"
+    J.~> "expr" J.:= expr
+    J.~> "op" J.:= op
+    J.~> J.jsonEmptyObject
+  Ident s →
+    "tag" J.:= "ident"
+    J.~> "value" J.:= s
+    J.~> J.jsonEmptyObject
+  InvokeFunction { name, args } →
+    "tag" J.:= "invoke function"
+    J.~> "name" J.:= name
+    J.~> "args" J.:= args
+    J.~> J.jsonEmptyObject
+  Match { expr, cases, else_ } →
+    "tag" J.:= "match"
+    J.~> "expr" J.:= expr
+    J.~> "cases" J.:= map encodeJsonCase cases
+    J.~> "else_" J.:= else_
+    J.~> J.jsonEmptyObject
+  Switch { cases, else_ } →
+    "tag" J.:= "switch"
+    J.~> "cases" J.:= map encodeJsonCase cases
+    J.~> "else_" J.:= else_
+    J.~> J.jsonEmptyObject
+  Let { ident, bindTo, in_ } →
+    "tag" J.:= "let"
+    J.~> "ident" J.:= ident
+    J.~> "bindTo" J.:= bindTo
+    J.~> "in_" J.:= in_
+    J.~> J.jsonEmptyObject
+  Vari s →
+    "tag" J.:= "vari"
+    J.~> "value" J.:= s
+    J.~> J.jsonEmptyObject
+  Select { isDistinct, projections, relations, filter, groupBy, orderBy } →
+    "tag" J.:= "select"
+    J.~> "isDistinct" J.:= isDistinct
+    J.~> "projections" J.:= map encodeJsonProjection projections
+    J.~> "relations" J.:= map encodeJsonRelation relations
+    J.~> "filter" J.:= filter
+    J.~> "groupBy" J.:= map encodeJsonGroupBy groupBy
+    J.~> "orderBy" J.:= map encodeJsonOrderBy orderBy
+    J.~> J.jsonEmptyObject
+  Parens a →
+    "tag" J.:= "parens"
+    J.~> "value" J.:= a
+    J.~> J.jsonEmptyObject
+
+
+decodeJsonSqlF
+  ∷ ∀ l
+  . CoalgebraM (E.Either String) l J.Json
+  → CoalgebraM (E.Either String) (SqlF l) J.Json
+decodeJsonSqlF coalg = J.decodeJson >=> \obj → do
+  tag ← obj J..? "tag"
+  case tag of
+    "set literal" → decodeSetLiteral obj
+    "literal" → decodeLiteral obj
+    "splice" → decodeSplice obj
+    "binop" → decodeBinop obj
+    "unop" → decodeUnop obj
+    "ident" → decodeIdent obj
+    "invoke function" → decodeInvokeFunction obj
+    "match" → decodeMatch obj
+    "switch" → decodeSwitch obj
+    "let" → decodeLet obj
+    "vari" → decodeVari obj
+    "select" → decodeSelect obj
+    "parens" → decodeParens obj
+    _ → E.Left "This is not SqlF expression"
+  where
+  decodeSetLiteral obj = do
+    v ← obj J..? "value"
+    pure $ SetLiteral v
+
+  decodeLiteral obj = do
+    v ← obj J..? "value"
+    literal ← coalg v
+    pure $ Literal literal
+
+  decodeSplice obj = do
+    v ← obj J..? "value"
+    pure $ Splice v
+
+  decodeBinop obj = do
+    lhs ← obj J..? "lhs"
+    rhs ← obj J..? "rhs"
+    op ← obj J..? "op"
+    pure $ Binop { lhs, rhs, op }
+
+  decodeUnop obj = do
+    expr ← obj J..? "expr"
+    op ← obj J..? "op"
+    pure $ Unop { expr, op }
+
+  decodeIdent obj = do
+    v ← obj J..? "value"
+    pure $ Ident v
+
+  decodeInvokeFunction obj = do
+    name ← obj J..? "name"
+    args ← obj J..? "args"
+    pure $ InvokeFunction { name, args }
+
+  decodeMatch obj = do
+    expr ← obj J..? "expr"
+    cases ← (obj J..? "cases") >>= T.traverse decodeJsonCase
+    else_ ← obj J..? "else_"
+    pure $ Match { expr, cases, else_ }
+
+  decodeSwitch obj = do
+   cases ← (obj J..? "cases") >>= T.traverse decodeJsonCase
+   else_ ← obj J..? "else_"
+   pure $ Switch { cases, else_ }
+
+  decodeLet obj = do
+    ident ← obj J..? "ident"
+    bindTo ← obj J..? "bindTo"
+    in_ ← obj J..? "in_"
+    pure $ Let { ident, bindTo, in_ }
+
+  decodeVari obj = do
+    v ← obj J..? "value"
+    pure $ Vari v
+
+  decodeSelect obj = do
+    isDistinct ← obj J..? "isDistinct"
+    projections ← (obj J..? "projections") >>= T.traverse decodeJsonProjection
+    relations ← (obj J..? "relations") >>= T.traverse decodeJsonRelation
+    filter ← obj J..? "filter"
+    groupBy ← (obj J..? "groupBy") >>= T.traverse decodeJsonGroupBy
+    orderBy ← (obj J..? "orderBy") >>= T.traverse decodeJsonOrderBy
+    pure $ Select { isDistinct, projections, relations, filter, groupBy, orderBy }
+
+  decodeParens obj = do
+    v ← obj J..? "value"
+    pure $ Parens v
+
+encodeJson ∷ Sql → J.Json
+encodeJson = cata $ encodeJsonSqlF encodeJsonEJsonF
+
+decodeJson ∷ J.Json → E.Either String Sql
+decodeJson = anaM $ decodeJsonSqlF decodeJsonEJsonF

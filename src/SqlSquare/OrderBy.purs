@@ -2,13 +2,15 @@ module SqlSquare.OrderBy where
 
 import Prelude
 
+import Data.Argonaut as J
+import Data.Either as E
 import Data.Foldable as F
 import Data.Traversable as T
 import Data.List as L
 import Data.Newtype (class Newtype)
 import Data.NonEmpty as NE
 
-import Matryoshka (Algebra)
+import Matryoshka (Algebra, CoalgebraM)
 
 import SqlSquare.OrderType as OT
 import SqlSquare.Utils ((×), type (×))
@@ -30,3 +32,18 @@ instance traversableOrderBy ∷ T.Traversable OrderBy where
 printOrderBy ∷ Algebra OrderBy String
 printOrderBy (OrderBy lst) =
   F.intercalate ", " $ lst <#> \(ot × a) → a <> " " <> OT.printOrderType ot
+
+encodeJsonOrderBy ∷ Algebra OrderBy J.Json
+encodeJsonOrderBy (OrderBy lst) =
+  "tag" J.:= "order by"
+  J.~> "value" J.:= (L.singleton (NE.head lst) <> NE.tail lst)
+  J.~> J.jsonEmptyObject
+
+decodeJsonOrderBy ∷ CoalgebraM (E.Either String) OrderBy J.Json
+decodeJsonOrderBy = J.decodeJson >=> \obj → do
+  tag ← obj J..? "tag"
+  unless (tag == "order by") $ E.Left "This is not order by expression"
+  lst ← obj J..? "value"
+  case lst of
+    L.Nil → E.Left "This is not order by expression"
+    L.Cons hd tail → pure $ OrderBy $ hd NE.:| tail

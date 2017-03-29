@@ -2,13 +2,15 @@ module SqlSquare.GroupBy where
 
 import Prelude
 
+import Data.Argonaut as J
+import Data.Either as E
 import Data.Foldable as F
 import Data.Traversable as T
 import Data.List as L
 import Data.Maybe (Maybe)
 import Data.Newtype (class Newtype)
 
-import Matryoshka (Algebra)
+import Matryoshka (Algebra, CoalgebraM)
 
 newtype GroupBy a = GroupBy { keys ∷ L.List a, having ∷ Maybe a }
 derive instance newtypeGroupBy ∷ Newtype (GroupBy a) _
@@ -29,3 +31,18 @@ instance traversableGroupBy ∷ T.Traversable GroupBy where
 printGroupBy ∷ Algebra GroupBy String
 printGroupBy (GroupBy { keys, having }) =
   F.intercalate ", " keys <> F.foldMap (" HAVING " <> _) having
+
+encodeJsonGroupBy ∷ Algebra GroupBy J.Json
+encodeJsonGroupBy (GroupBy { keys, having }) =
+  "tag" J.:= "group by"
+  J.~> "keys" J.:= keys
+  J.~> "having" J.:= having
+  J.~> J.jsonEmptyObject
+
+decodeJsonGroupBy ∷ CoalgebraM (E.Either String) GroupBy J.Json
+decodeJsonGroupBy = J.decodeJson >=> \obj → do
+  tag ← obj J..? "tag"
+  unless (tag == "group by") $ E.Left "This is not group by expression"
+  keys ← obj J..? "keys"
+  having ← obj J..? "having"
+  pure $ GroupBy { keys, having }

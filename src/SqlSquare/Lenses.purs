@@ -53,7 +53,6 @@ _IdentRelation = prism' S.IdentRelation case _ of
   S.IdentRelation r → M.Just r
   _ → M.Nothing
 
-
 _lhs ∷ ∀ a r. Lens' { lhs ∷ a |r } a
 _lhs = lens _.lhs _{ lhs = _ }
 

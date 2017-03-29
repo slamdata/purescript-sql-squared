@@ -2,14 +2,15 @@ module SqlSquare.Relation where
 
 import Prelude
 
-import Data.Either (Either, either)
+import Data.Argonaut as J
+import Data.Either (Either(..), either)
 import Data.Foldable as F
 import Data.Monoid (mempty)
 import Data.Traversable as T
 import Data.Maybe (Maybe)
-import Data.Path.Pathy (AbsFile, RelFile, Unsandboxed, unsafePrintPath)
+import Data.Path.Pathy (AbsFile, RelFile, Unsandboxed, unsafePrintPath, parsePath)
 
-import Matryoshka (Algebra)
+import Matryoshka (Algebra, CoalgebraM)
 
 import SqlSquare.JoinType as JT
 import SqlSquare.Utils ((∘))
@@ -107,3 +108,80 @@ printRelation = case _ of
     <> printRelation right
     <> " on "
     <> clause
+
+encodeJsonRelation ∷ Algebra Relation J.Json
+encodeJsonRelation = case _ of
+  ExprRelation { expr, aliasName } →
+    "tag" J.:= "expr relation"
+    J.~> "expr" J.:= expr
+    J.~> "aliasName" J.:= aliasName
+    J.~> J.jsonEmptyObject
+  VariRelation { vari, alias } →
+    "tag" J.:= "vari relation"
+    J.~> "vari" J.:= vari
+    J.~> "alias" J.:= alias
+    J.~> J.jsonEmptyObject
+  TableRelation { tablePath, alias } →
+    "tag" J.:= "table relation"
+    J.~> "tablePath" J.:= either unsafePrintPath unsafePrintPath tablePath
+    J.~> "alias" J.:= alias
+    J.~> J.jsonEmptyObject
+  IdentRelation { ident, alias } →
+    "tag" J.:= "ident relation"
+    J.~> "ident" J.:= ident
+    J.~> "alias" J.:= alias
+    J.~> J.jsonEmptyObject
+  JoinRelation { left, right, joinType, clause } →
+    "tag" J.:= "join relation"
+    J.~> "left" J.:= encodeJsonRelation left
+    J.~> "right" J.:= encodeJsonRelation right
+    J.~> "joinType" J.:= joinType
+    J.~> "clause" J.:= clause
+    J.~> J.jsonEmptyObject
+
+decodeJsonRelation ∷ CoalgebraM (Either String) Relation J.Json
+decodeJsonRelation = J.decodeJson >=> \obj → do
+  tag ← obj J..? "tag"
+  case tag of
+    "expr relation" → decodeExprRelation obj
+    "vari relation" → decodeVariRelation obj
+    "table relation" → decodeTableRelation obj
+    "ident relation" → decodeIdentRelation obj
+    "join relation" → decodeJoinRelation obj
+    _ → Left "This is not join relation"
+  where
+  decodeExprRelation obj = do
+    expr ← obj J..? "expr"
+    aliasName ← obj J..? "aliasName"
+    pure $ ExprRelation { expr, aliasName }
+
+  decodeVariRelation obj = do
+    vari ← obj J..? "vari"
+    alias ← obj J..? "alias"
+    pure $ VariRelation { vari, alias }
+
+
+  decodeTableRelation obj = do
+    tableString ← obj J..? "tablePath"
+    alias ← obj J..? "alias"
+    tablePath ←
+      parsePath
+        (const $ Left "Incorrect table path in table relation")
+        (const $ Left "Incorrect table path in table relation")
+        (Right ∘ Left)
+        (Right ∘ Right)
+        tableString
+    pure $ TableRelation { tablePath, alias }
+
+  decodeIdentRelation obj = do
+    ident ← obj J..? "ident"
+    alias ← obj J..? "alias"
+    pure $ IdentRelation { ident, alias }
+
+
+  decodeJoinRelation obj = do
+    left ← decodeJsonRelation =<< obj J..? "left"
+    right ← decodeJsonRelation =<< obj J..? "right"
+    clause ← obj J..? "close"
+    joinType ← obj J..? "joinType"
+    pure $ JoinRelation { left, right, clause, joinType }
