@@ -175,7 +175,7 @@ needDistinctF ∷ Algebra (S.SqlF EJ.EJsonF) Boolean
 needDistinctF = case _ of
   S.SetLiteral ns → F.or ns
   S.Literal (EJ.Array ns) → F.or ns
-  S.Literal (EJ.Map tpls) → F.any (\(a × b) → a || b) tpls
+  S.Literal (EJ.Map (EJ.EJsonMap tpls)) → F.any (\(a × b) → a || b) tpls
   S.Splice Nothing → false
   S.Splice (Just a) → a
   S.Binop { lhs, rhs } → lhs || rhs

@@ -4,7 +4,7 @@ import Prelude
 
 import Data.Array as Arr
 import Data.DateTime as DT
-import Data.Json.Extended.Signature (EJsonF(..))
+import Data.Json.Extended.Signature (EJsonF(..), EJsonMap(..))
 import Data.Foldable as F
 import Data.HugeNum as HN
 import Data.List as L
@@ -55,7 +55,7 @@ array ∷ ∀ t f. (Corecursive t (SqlF EJsonF), F.Foldable f) ⇒ f t → t
 array l = embed $ Literal $ Array $ Arr.fromFoldable l
 
 map_ ∷ ∀ t. (Corecursive t (SqlF EJsonF), Ord t) ⇒ Map.Map t t → t
-map_ m = embed $ Literal $ Map $ Arr.fromFoldable $ Map.toList m
+map_ m = embed $ Literal $ Map ∘ EJsonMap $ Arr.fromFoldable $ Map.toList m
 
 splice ∷ ∀ t f. Corecursive t (SqlF f) ⇒ Maybe t → t
 splice m = embed $ Splice m
