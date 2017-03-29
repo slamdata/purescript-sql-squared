@@ -164,8 +164,8 @@ _MapLiteral
   ∷ ∀ t
   . (Recursive t (S.SqlF EJ.EJsonF), Corecursive t (S.SqlF EJ.EJsonF))
   ⇒ Prism' t (Array (t × t))
-_MapLiteral = prism' (embed ∘ S.Literal ∘ EJ.Map) $ project ⋙ case _ of
-  S.Literal (EJ.Map tpls) → M.Just tpls
+_MapLiteral = prism' (embed ∘ S.Literal ∘ EJ.Map ∘ EJ.EJsonMap) $ project ⋙ case _ of
+  S.Literal (EJ.Map (EJ.EJsonMap tpls)) → M.Just tpls
   _ → M.Nothing
 
 _Splice
