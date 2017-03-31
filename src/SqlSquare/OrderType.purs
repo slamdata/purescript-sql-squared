@@ -4,11 +4,8 @@ import Prelude
 
 import Data.Argonaut as J
 import Data.Either (Either(..))
-import Data.List ((:))
-import Data.List as L
 
 import Test.StrongCheck.Arbitrary as A
-import Test.StrongCheck.Gen as Gen
 
 data OrderType = ASC | DESC
 
@@ -38,3 +35,6 @@ instance decodeJsonOrderType ∷ J.DecodeJson OrderType where
     unless (tag == "order type")
       $ Left "This is not order type"
     (obj J..? "value") >>= orderTypeFromString
+
+instance arbitraryJoinType ∷ A.Arbitrary OrderType where
+  arbitrary = A.arbitrary <#> if _ then ASC else DESC

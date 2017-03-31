@@ -7,10 +7,13 @@ import Data.Either as E
 import Data.Foldable as F
 import Data.Traversable as T
 import Data.List as L
-import Data.Maybe (Maybe)
+import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype)
 
 import Matryoshka (Algebra, CoalgebraM)
+
+import Test.StrongCheck.Arbitrary as SC
+import Test.StrongCheck.Gen as Gen
 
 newtype GroupBy a = GroupBy { keys ∷ L.List a, having ∷ Maybe a }
 derive instance newtypeGroupBy ∷ Newtype (GroupBy a) _
@@ -46,3 +49,13 @@ decodeJsonGroupBy = J.decodeJson >=> \obj → do
   keys ← obj J..? "keys"
   having ← obj J..? "having"
   pure $ GroupBy { keys, having }
+
+arbitraryGroupBy ∷ CoalgebraM Gen.Gen GroupBy Int
+arbitraryGroupBy n
+  | n == 0 = pure $ GroupBy { having: Nothing, keys: L.Nil }
+  | otherwise = do
+    len ← Gen.chooseInt 0 $ n - 1
+    nothing ← SC.arbitrary
+    pure $ GroupBy { having: if nothing then Nothing else Just $ n - 1
+                   , keys: map (const $ n - 1) $ L.range 0 len
+                   }

@@ -15,6 +15,9 @@ import Matryoshka (Algebra, CoalgebraM)
 import SqlSquare.OrderType as OT
 import SqlSquare.Utils ((×), type (×))
 
+import Test.StrongCheck.Arbitrary as SC
+import Test.StrongCheck.Gen as Gen
+
 newtype OrderBy a = OrderBy (NE.NonEmpty L.List (OT.OrderType × a))
 
 derive instance functorOrderBy ∷ Functor OrderBy
@@ -47,3 +50,19 @@ decodeJsonOrderBy = J.decodeJson >=> \obj → do
   case lst of
     L.Nil → E.Left "This is not order by expression"
     L.Cons hd tail → pure $ OrderBy $ hd NE.:| tail
+
+arbitraryOrderBy ∷ CoalgebraM Gen.Gen OrderBy Int
+arbitraryOrderBy n
+  | n < 2 = do
+    ot ← SC.arbitrary
+    pure $ OrderBy $ (ot × n - 1) NE.:| L.Nil
+  | otherwise = do
+    len ← Gen.chooseInt 0 $ n - 1
+    let
+      foldFn acc _ = do
+        ot ← SC.arbitrary
+        pure $ (ot × n - 1) L.: acc
+
+    lst ← L.foldM foldFn L.Nil $ L.range 0 len
+    ot ← SC.arbitrary
+    pure $ OrderBy $ (ot × n - 1) NE.:| lst

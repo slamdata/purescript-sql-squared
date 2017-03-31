@@ -13,6 +13,9 @@ import Matryoshka (Algebra, CoalgebraM)
 
 import SqlSquare.Utils ((∘))
 
+import Test.StrongCheck.Arbitrary as SC
+import Test.StrongCheck.Gen as Gen
+
 newtype Projection a = Projection { expr ∷ a, alias ∷ Maybe String }
 
 derive instance functorProjection ∷ Functor Projection
@@ -45,3 +48,8 @@ decodeJsonProjection = J.decodeJson >=> \obj → do
   expr ← obj J..? "expr"
   alias ← obj J..? "alias"
   pure $ Projection { expr, alias }
+
+arbitraryProjection ∷ CoalgebraM Gen.Gen Projection Int
+arbitraryProjection n = do
+  alias ← SC.arbitrary
+  pure $ Projection { expr: n - 1, alias }

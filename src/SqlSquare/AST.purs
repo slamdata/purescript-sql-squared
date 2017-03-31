@@ -10,6 +10,9 @@ module SqlSquare.AST
   , Sql
   , printF
   , print
+  , encodeJson
+  , decodeJson
+  , arbitrarySqlOfSize
   , module SqlSquare.Utils
   , module OT
   , module JT
@@ -27,6 +30,7 @@ import Prelude
 import Data.Argonaut as J
 import Data.Either as E
 import Data.Eq (class Eq1, eq1)
+import Data.Int as Int
 import Data.Foldable as F
 import Data.Traversable as T
 import Data.Functor.Mu (Mu)
@@ -35,7 +39,7 @@ import Data.Maybe (Maybe(..))
 import Data.Monoid (mempty)
 import Data.Ord (class Ord1, compare1)
 
-import Data.Json.Extended.Signature (EJsonF, renderEJsonF, encodeJsonEJsonF, decodeJsonEJsonF)
+import Data.Json.Extended.Signature (EJsonF, renderEJsonF, encodeJsonEJsonF, decodeJsonEJsonF, arbitraryEJsonF)
 
 import SqlSquare.Utils (type (×), (×), (∘), (⋙))
 import SqlSquare.OrderType as OT
@@ -45,26 +49,31 @@ import SqlSquare.UnaryOperator (UnaryOperator(..))
 import SqlSquare.GroupBy
   ( GroupBy(..)
   , printGroupBy
+  , arbitraryGroupBy
   , encodeJsonGroupBy
   , decodeJsonGroupBy)
 import SqlSquare.Case
   ( Case(..)
   , printCase
+  , arbitraryCase
   , encodeJsonCase
   , decodeJsonCase)
 import SqlSquare.OrderBy
   ( OrderBy(..)
   , printOrderBy
+  , arbitraryOrderBy
   , encodeJsonOrderBy
   , decodeJsonOrderBy)
 import SqlSquare.Projection
   ( Projection(..)
   , printProjection
+  , arbitraryProjection
   , encodeJsonProjection
   , decodeJsonProjection)
 import SqlSquare.Relation
   ( Relation(..)
   , printRelation
+  , arbitraryRelation
   , FUPath
   , JoinRelR
   , ExprRelR
@@ -75,6 +84,10 @@ import SqlSquare.Relation
   , decodeJsonRelation)
 
 import Matryoshka (Algebra, cata, CoalgebraM, anaM)
+
+
+import Test.StrongCheck.Arbitrary as SC
+import Test.StrongCheck.Gen as Gen
 
 type BinopR a =
   { lhs ∷ a
@@ -137,6 +150,7 @@ derive instance eqSqlF ∷ (Eq a, Eq (l a)) ⇒ Eq (SqlF l a)
 derive instance ordSqlF ∷ (Ord a, Ord (l a)) ⇒ Ord (SqlF l a)
 
 instance eq1SqlF ∷ Eq1 l ⇒ Eq1 (SqlF l) where
+  eq1 (SetLiteral lst) (SetLiteral llst) = eq lst llst
   eq1 (Literal l) (Literal ll) = eq1 l ll
   eq1 (Splice a) (Splice aa) = eq a aa
   eq1 (Binop r) (Binop rr) =
@@ -653,3 +667,118 @@ encodeJson = cata $ encodeJsonSqlF encodeJsonEJsonF
 
 decodeJson ∷ J.Json → E.Either String Sql
 decodeJson = anaM $ decodeJsonSqlF decodeJsonEJsonF
+
+arbitrarySqlF
+  ∷ ∀ l
+  . CoalgebraM Gen.Gen l Int
+  → CoalgebraM Gen.Gen (SqlF l) Int
+arbitrarySqlF genLiteral n
+  | n < 2 =
+  Gen.oneOf (map Literal $ genLiteral n)
+    [ map Ident SC.arbitrary
+    , map Vari SC.arbitrary
+    , pure $ Splice Nothing
+    , pure $ SetLiteral L.Nil
+    ]
+  | otherwise = do
+  Gen.oneOf (map Literal $ genLiteral n)
+    [ pure $ Splice $ Just $ n - 1
+    , pure $ Parens $ n - 1
+    , genSetLiteral
+    , genBinop
+    , genUnop
+    , genInvokeFunction
+    , genMatch
+    , genSwitch
+    , genLet
+    , genSelect
+    ]
+  where
+  genSetLiteral = do
+    len ← Gen.chooseInt 0 $ n - 1
+    pure $ SetLiteral $ map (const $ n - 1) $ L.range 0 len
+
+  genBinop = do
+    op ← SC.arbitrary
+    pure $ Binop { op, lhs: n - 1, rhs: n - 1 }
+
+  genUnop = do
+    op ← SC.arbitrary
+    pure $ Unop { op, expr: n - 1 }
+
+  genInvokeFunction = do
+    name ← SC.arbitrary
+    len ← Gen.chooseInt 0 $ n - 1
+    pure $ InvokeFunction { name, args: map (const $ n - 1) $ L.range 0 len }
+
+  genMatch = do
+    nothing ← SC.arbitrary
+    len ← Gen.chooseInt 0 $ n - 1
+    let
+      foldFn acc _ = do
+        cs ← arbitraryCase $ n - 1
+        pure $ cs L.: acc
+    cases ← L.foldM foldFn L.Nil $ L.range 0 len
+    pure $ Match { expr: n - 1
+                 , cases
+                 , else_: if nothing then Nothing else Just $ n - 1
+                 }
+  genSwitch = do
+    nothing ← SC.arbitrary
+    len ← Gen.chooseInt 0 $ n - 1
+    let
+      foldFn acc _ = do
+        cs ← arbitraryCase $ n - 1
+        pure $ cs L.: acc
+    cases ← L.foldM foldFn L.Nil $ L.range 0 len
+    pure $ Switch { cases
+                  , else_: if nothing then Nothing else Just $ n - 1
+                  }
+
+  genLet = do
+    ident ← map (Int.toStringAs Int.hexadecimal) $ SC.arbitrary
+    pure $ Let { ident
+               , bindTo: n - 1
+               , in_: n - 1
+               }
+  genSelect = do
+    prjLen ← Gen.chooseInt 0 $ n - 1
+    mbRelation ← SC.arbitrary
+    mbFilter ← SC.arbitrary
+    mbGroupBy ← SC.arbitrary
+    mbOrderBy ← SC.arbitrary
+
+    isDistinct ← SC.arbitrary
+
+    let
+      foldPrj acc _ = do
+        prj ← arbitraryProjection $ n - 1
+        pure $ prj L.:acc
+    projections ←
+      L.foldM foldPrj L.Nil $ L.range 0 prjLen
+
+    relations ←
+      if mbRelation
+        then pure Nothing
+        else map Just $ arbitraryRelation $ n - 1
+
+    groupBy ←
+      if mbGroupBy
+        then pure Nothing
+        else map Just $ arbitraryGroupBy $ n - 1
+
+    orderBy ←
+      if mbOrderBy
+        then pure Nothing
+        else map Just $ arbitraryOrderBy $ n - 1
+
+    pure $ Select { isDistinct
+                  , projections
+                  , relations
+                  , filter: if mbFilter then Nothing else Just $ n - 1
+                  , groupBy
+                  , orderBy
+                  }
+
+arbitrarySqlOfSize ∷ Int → Gen.Gen Sql
+arbitrarySqlOfSize = anaM $ arbitrarySqlF arbitraryEJsonF

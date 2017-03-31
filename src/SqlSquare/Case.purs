@@ -10,6 +10,8 @@ import Data.Traversable as T
 
 import Matryoshka (Algebra, CoalgebraM)
 
+import Test.StrongCheck.Gen as Gen
+
 newtype Case a = Case { cond ∷ a, expr ∷ a }
 
 derive instance functorCase ∷ Functor Case
@@ -42,3 +44,9 @@ decodeJsonCase = J.decodeJson >=> \obj → do
   cond ← obj J..? "cond"
   expr ← obj J..? "expr"
   pure $ Case { cond, expr }
+
+
+arbitraryCase ∷ CoalgebraM Gen.Gen Case Int
+arbitraryCase n
+  | n < 2 = pure $ Case { cond: 0, expr: 0 }
+  | otherwise = pure $ Case { cond: n - 1, expr: n - 1 }

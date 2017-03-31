@@ -3,17 +3,23 @@ module SqlSquare.Relation where
 import Prelude
 
 import Data.Argonaut as J
+import Data.Array as A
 import Data.Either (Either(..), either)
+import Data.Int as Int
 import Data.Foldable as F
 import Data.Monoid (mempty)
 import Data.Traversable as T
 import Data.Maybe (Maybe)
-import Data.Path.Pathy (AbsFile, RelFile, Unsandboxed, unsafePrintPath, parsePath)
+import Data.Path.Pathy (AbsFile, RelFile, Unsandboxed, unsafePrintPath, parsePath, (</>))
+import Data.Path.Pathy as Pt
 
 import Matryoshka (Algebra, CoalgebraM)
 
 import SqlSquare.JoinType as JT
 import SqlSquare.Utils ((∘))
+
+import Test.StrongCheck.Arbitrary as SC
+import Test.StrongCheck.Gen as Gen
 
 type FUPath = Either (RelFile Unsandboxed) (AbsFile Unsandboxed)
 
@@ -182,6 +188,54 @@ decodeJsonRelation = J.decodeJson >=> \obj → do
   decodeJoinRelation obj = do
     left ← decodeJsonRelation =<< obj J..? "left"
     right ← decodeJsonRelation =<< obj J..? "right"
-    clause ← obj J..? "close"
+    clause ← obj J..? "clause"
     joinType ← obj J..? "joinType"
     pure $ JoinRelation { left, right, clause, joinType }
+
+genPath ∷ Int → Gen.Gen FUPath
+genPath n = do
+  d ← A.foldM foldFn Pt.rootDir $ A.replicate n unit
+  name ← map (Int.toStringAs Int.hexadecimal) SC.arbitrary
+  pure $ Right $ d </> Pt.file name
+  where
+  foldFn pt _ = do
+    name ← map (Int.toStringAs Int.hexadecimal) SC.arbitrary
+    pure $ pt </> Pt.dir name
+
+
+arbitraryRelation ∷ CoalgebraM Gen.Gen Relation Int
+arbitraryRelation n =
+  if n < 1
+  then
+    Gen.oneOf genTable
+      [ genVari
+      , genIdent
+      ]
+  else
+    Gen.oneOf genTable
+      [ genVari
+      , genIdent
+      , genJoin
+      , genExpr
+      ]
+  where
+  genVari = do
+    vari ← SC.arbitrary
+    alias ← SC.arbitrary
+    pure $ VariRelation { vari, alias }
+  genIdent = do
+    ident ← SC.arbitrary
+    alias ← SC.arbitrary
+    pure $ IdentRelation { ident, alias }
+  genTable = do
+    tablePath ← genPath $ n + 2
+    alias ← SC.arbitrary
+    pure $ TableRelation { tablePath, alias }
+  genExpr = do
+    aliasName ← SC.arbitrary
+    pure $ ExprRelation { aliasName, expr: n - 1 }
+  genJoin = do
+    joinType ← SC.arbitrary
+    left ← arbitraryRelation $ n - 1
+    right ← arbitraryRelation $ n - 1
+    pure $ JoinRelation { joinType, left, right, clause: n - 1 }
