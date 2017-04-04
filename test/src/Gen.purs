@@ -2,7 +2,7 @@ module Test.Gen where
 
 import Prelude
 
-import Control.Monad.Eff (Eff, forE)
+import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Exception (EXCEPTION)
 import Control.Monad.Eff.Random (RANDOM)
 import Control.Monad.Eff.Console (CONSOLE)
@@ -26,22 +26,9 @@ testJsonSerialization ∷ ∀ r. Eff (TestEffects r) Unit
 testJsonSerialization =
   SC.quickCheck' 50 \(ArbSql sql) → case decodeJson $ encodeJson sql of
     E.Right res →
-      if (res /= sql)
-      then
-        let
-          o = DT.spy res
-          oo = DT.spy sql
-          ooo = DT.spy $ encodeJson res
-          oooo = DT.spy $ encodeJson sql
-          ooooo = DT.spy $ print res
-          oooooo = DT.spy $ print sql
-        in
-         SC.Failed "Mismatch"
-      else
-        SC.Success
---      res == sql <?> "Mismatch:\n" <> print sql <> "\n" <> print res
+      res == sql <?> "Mismatch:\n" <> print sql <> "\n" <> print res
     E.Left err →
-      SC.Failed $ "Parse error: " <> err <> " \n" <> print sql
+      SC.Failed $ "Argonaut codecs  error: " <> err <> " \n" <> print sql
 
 type TestEffects r =
   ( err ∷ EXCEPTION

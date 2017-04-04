@@ -27,6 +27,10 @@ module SqlSquare.AST
 
 import Prelude
 
+import Control.Alt ((<|>))
+import Control.Lazy as Lazy
+
+import Data.Array as A
 import Data.Argonaut as J
 import Data.Either as E
 import Data.Eq (class Eq1, eq1)
@@ -35,11 +39,13 @@ import Data.Foldable as F
 import Data.Traversable as T
 import Data.Functor.Mu (Mu)
 import Data.List as L
-import Data.Maybe (Maybe(..))
+import Data.NonEmpty as NE
+import Data.Maybe (Maybe(..), isJust)
 import Data.Monoid (mempty)
 import Data.Ord (class Ord1, compare1)
+import Data.String as S
 
-import Data.Json.Extended.Signature (EJsonF, renderEJsonF, encodeJsonEJsonF, decodeJsonEJsonF, arbitraryEJsonF)
+import Data.Json.Extended.Signature (EJsonF, renderEJsonF, encodeJsonEJsonF, decodeJsonEJsonF, arbitraryEJsonF, parseEJsonF)
 
 import SqlSquare.Utils (type (×), (×), (∘), (⋙))
 import SqlSquare.OrderType as OT
@@ -82,12 +88,18 @@ import SqlSquare.Relation
   , IdentRelR
   , encodeJsonRelation
   , decodeJsonRelation)
+import SqlSquare.OrderType (OrderType(..))
 
-import Matryoshka (Algebra, cata, CoalgebraM, anaM)
-
+import Matryoshka (Algebra, cata, CoalgebraM, anaM, embed)
 
 import Test.StrongCheck.Arbitrary as SC
 import Test.StrongCheck.Gen as Gen
+
+import Text.Parsing.Parser as P
+import Text.Parsing.Parser.Combinators as PC
+import Text.Parsing.Parser.String as PS
+
+import Unsafe.Coerce (unsafeCoerce)
 
 type BinopR a =
   { lhs ∷ a
@@ -249,57 +261,7 @@ instance ord1SqlF ∷ Ord1 l ⇒ Ord1 (SqlF l) where
     <> compare r.orderBy rr.orderBy
     <> compare r.groupBy rr.groupBy
 
-instance functorAST ∷ Functor l ⇒ Functor (SqlF l) where
-  map f = case _ of
-    Select { isDistinct, projections, relations, filter, groupBy, orderBy } →
-      Select { isDistinct
-             , projections: map (map f) projections
-             , relations: map (map f) relations
-             , filter: map f filter
-             , groupBy: map (map f) groupBy
-             , orderBy: map (map f) orderBy
-             }
-    Vari s →
-      Vari s
-    Let { ident, bindTo, in_ } →
-      Let { ident
-          , bindTo: f bindTo
-          , in_: f in_
-          }
-    Splice a →
-      Splice $ map f a
-    Binop { lhs, rhs, op } →
-      Binop { lhs: f lhs
-            , rhs: f rhs
-            , op
-            }
-    Unop { expr, op } →
-      Unop { expr: f expr
-           , op
-           }
-    Ident s →
-      Ident s
-    InvokeFunction { name, args } →
-      InvokeFunction { name
-                     , args: map f args
-                     }
-    Match { expr, cases, else_ } →
-      Match { expr: f expr
-            , cases: map (map f) cases
-            , else_: map f else_
-            }
-    Switch { cases, else_ } →
-      Switch { cases: map (map f) cases
-             , else_: map f else_
-             }
-    SetLiteral lst →
-      SetLiteral $ map f lst
-    Literal l →
-      Literal $ map f l
-    Parens t →
-      Parens $ f t
-
-
+derive instance functorAST ∷ Functor l ⇒ Functor (SqlF l)
 
 instance foldableSqlF ∷ F.Foldable l ⇒ F.Foldable (SqlF l) where
   foldMap f = case _ of
@@ -460,7 +422,7 @@ printF printLiteralF = case _ of
     Positive → "+" <> expr
     Negative → "-" <> expr
     Distinct → "DISTINCT " <> expr
-    FlattenMapKeys → expr <> "{*: }"
+    FlattenMapKeys → expr <> "{*:}"
     FlattenMapValues → expr <> "{*}"
     ShiftMapKeys → expr <> "{_: }"
     ShiftMapValues → expr <> "{_}"
@@ -782,3 +744,217 @@ arbitrarySqlF genLiteral n
 
 arbitrarySqlOfSize ∷ Int → Gen.Gen Sql
 arbitrarySqlOfSize = anaM $ arbitrarySqlF arbitraryEJsonF
+
+parseSql ∷ ∀ m. Monad m ⇒ P.ParserT String m Sql
+parseSql = Lazy.fix $ \f → map embed $ parseSqlF parseEJsonF f
+
+parseSqlF
+  ∷ ∀ m a l
+  . Monad m
+  ⇒ (P.ParserT String m a → P.ParserT String m (l a))
+  → P.ParserT String m a
+  → P.ParserT String m (SqlF l a)
+parseSqlF litParserCb cb =
+  (PC.try $ parseLiteral cb)
+  <|> (PC.try $ parseLet cb)
+  <|> (PC.try $ parseSelect cb)
+  <|> (PC.try parseVariable)
+  <|> (PC.try $ parseSplice cb)
+  <|> (PC.try $ parseIdent)
+  <|> (PC.try $ parseInvokeFunction cb)
+  <|> (PC.try $ parseParens cb)
+  <|> (PC.try $ parseUnaryOperator cb)
+  <|> (PC.try $ parseBinaryOperator cb)
+  <|> (PC.try $ parseSwitch cb)
+
+  where
+  parseLiteral r = map Literal $ litParserCb r
+
+  parseLet r = do
+    i ← identParser
+    PS.string ":="
+    bindTo ← r
+    PS.string ";"
+    in_ ← r
+    pure $ Let { ident: i, bindTo, in_ }
+
+  parseSelect r = do
+    PS.string "select"
+    PS.skipSpaces
+    isDistinct ← map isJust $ PC.optionMaybe (PS.string "distinct")
+    projections ← flip PC.sepBy (PS.string ",") do
+      PS.skipSpaces
+      parseProjection r
+
+    relations ← PC.optionMaybe do
+      PS.skipSpaces
+      PS.string "from"
+      PS.skipSpaces
+      parseRelation r
+    filter ← PC.optionMaybe do
+      PS.string "where"
+      PS.skipSpaces
+      r
+    groupBy ← PC.optionMaybe do
+      PS.string "group by"
+      PS.skipSpaces
+      parseGroupBy r
+    orderBy ← PC.optionMaybe do
+      PS.string "order by"
+      PS.skipSpaces
+      parseOrderBy r
+    pure $ Select { isDistinct, projections, relations, filter, groupBy, orderBy }
+
+  parseProjection r = do
+    expr ← r
+    alias ← PC.optionMaybe do
+      PS.skipSpaces
+      PS.string "as"
+      PS.skipSpaces
+      identParser
+    pure $ Projection { expr, alias }
+
+  parseRelation r = do
+    (PC.try $ parseExprRelation r)
+    <|> (PC.try $ parseVariRelation)
+    <|> (PC.try $ parseTableRelation)
+    <|> (PC.try $ parseJoinRelation r)
+    <|> (parseIdentRelation)
+
+  parseExprRelation r = do
+    PS.string "("
+    PS.skipSpaces
+    expr ← r
+    PS.skipSpaces
+    aliasName ← identParser
+    pure $ ExprRelation { expr, aliasName }
+
+  parseVariRelation = do
+    PS.string ":"
+    vari ← identParser
+    PS.skipSpaces
+    alias ← PC.optionMaybe identParser
+    pure $ VariRelation { vari, alias }
+
+  parseIdentRelation = do
+    ident ← identParser
+    PS.skipSpaces
+    alias ← PC.optionMaybe identParser
+    pure $ IdentRelation { ident, alias }
+
+  parseTableRelation = do
+    ident ← identParser
+    PS.skipSpaces
+    alias ← PC.optionMaybe identParser
+    pure $ TableRelation { tablePath: unsafeCoerce unit, alias }
+
+  parseJoinRelation r = do
+    left ← parseRelation r
+    PS.skipSpaces
+    joinType ← parseJoinType
+    right ← parseRelation r
+    clause ← r
+    pure $ JoinRelation { left, right, joinType, clause }
+
+  parseJoinType = do
+    ((PC.try $ PS.string "left join") $> JT.LeftJoin)
+    <|> ((PC.try $ PS.string "right join") $> JT.RightJoin)
+    <|> ((PC.try $ PS.string "full join") $> JT.FullJoin)
+    <|> ((PC.try $ PS.string "inner join") $> JT.InnerJoin)
+    <|> (PS.string "join" $> JT.FullJoin)
+
+  parseGroupBy r = do
+    keys ← PC.sepBy1 r $ PS.skipSpaces *> PS.string ","
+    PS.skipSpaces
+    having ← PC.optionMaybe do
+      PS.string "having"
+      PS.skipSpaces
+      r
+    pure $ GroupBy { keys, having }
+
+  parseOrderBy ∷ P.ParserT String m a → P.ParserT String m (OrderBy a)
+  parseOrderBy r = do
+    head ← parseOneOB r
+    PS.skipSpaces
+    PC.optional $ PS.string ","
+    PS.skipSpaces
+    tail ← PC.sepBy (parseOneOB r) $ PS.skipSpaces *> PS.string ","
+    pure $ OrderBy $ head NE.:| tail
+
+  parseOneOB r = do
+    ot ← parseOrderType
+    v ← r
+    pure $ ot × v
+
+  parseOrderType =
+    (PS.string "ASC" $> ASC)
+    <|> (PS.string "DESC" $> DESC)
+
+  parseVariable = do
+    PS.string ":"
+    ident ← identParser
+    pure $ Vari ident
+
+  parseSplice r = do
+    PS.string "*"
+    mbTail ← PC.optionMaybe do
+      PS.string "."
+      r
+    pure $ Splice mbTail
+
+  parseIdent = map Ident identParser
+
+  parseInvokeFunction r = do
+    name ← identParser
+    PS.string "("
+    args ← PC.sepBy r $ PS.string ","
+    PS.string ")"
+    pure $ InvokeFunction { name, args }
+
+  parseParens r = do
+    PS.string "("
+    lst ← PC.sepBy r $ PS.string ","
+    case lst of
+      L.Cons a L.Nil → pure $ Parens a
+      xs → pure $ SetLiteral xs
+
+  parseSwitch r = do
+    PS.string "case"
+    PS.skipSpaces
+    mbExpr ← PC.optionMaybe r
+    PS.skipSpaces
+    cases ← L.some $ parseCase r
+    else_ ← PC.optionMaybe do
+      PS.skipSpaces
+      PS.string "else"
+      PS.skipSpaces
+      r
+    PS.string "end"
+    pure case mbExpr of
+      Nothing → Switch { cases, else_ }
+      Just expr → Match { expr, cases, else_ }
+
+  parseCase r = do
+    PS.skipSpaces
+    PS.string "when"
+    cond ← r
+    PS.skipSpaces
+    PS.string "then"
+    PS.skipSpaces
+    expr ← r
+    pure $ Case { cond, expr }
+
+  parseUnaryOperator r = do
+    pure $ unsafeCoerce unit
+
+  parseBinaryOperator r = do
+    pure $ unsafeCoerce unit
+
+
+identParser ∷ ∀ m. Monad m ⇒ P.ParserT String m String
+identParser =
+  map S.fromCharArray
+  $ (PC.try $ PC.between (PS.string "`") (PS.string "`") $ A.some stringChar)
+  <|> (A.some stringChar)
+  where
+  stringChar = PS.noneOf [ '`' ]

@@ -2,7 +2,6 @@ module SqlSquare.Lenses where
 
 import Prelude
 
-import Data.DateTime as DT
 import Data.HugeNum as HN
 import Data.Json.Extended as EJ
 import Data.Lens (Prism', prism', Lens', lens, Iso')
@@ -293,28 +292,4 @@ _Parens
   ⇒ Prism' t t
 _Parens = prism' (embed ∘ S.Parens) $ project ⋙ case _ of
   S.Parens t → M.Just t
-  _ → M.Nothing
-
-_TimeLiteral
-  ∷ ∀ t
-  . (Recursive t (S.SqlF EJ.EJsonF), Corecursive t (S.SqlF EJ.EJsonF))
-  ⇒ Prism' t DT.Time
-_TimeLiteral = prism' (embed ∘ S.Literal ∘ EJ.Time) $ project ⋙ case _ of
-  S.Literal (EJ.Time t) → M.Just t
-  _ → M.Nothing
-
-_DateLiteral
-  ∷ ∀ t
-  . (Recursive t (S.SqlF EJ.EJsonF), Corecursive t (S.SqlF EJ.EJsonF))
-  ⇒ Prism' t DT.Date
-_DateLiteral = prism' (embed ∘ S.Literal ∘ EJ.Date) $ project ⋙ case _ of
-  S.Literal (EJ.Date d) → M.Just d
-  _ → M.Nothing
-
-_TimestampLiteral
-  ∷ ∀ t
-  . (Recursive t (S.SqlF EJ.EJsonF), Corecursive t (S.SqlF EJ.EJsonF))
-  ⇒ Prism' t DT.DateTime
-_TimestampLiteral = prism' (embed ∘ S.Literal ∘ EJ.Timestamp) $ project ⋙ case _ of
-  S.Literal (EJ.Timestamp dt) → M.Just dt
   _ → M.Nothing

@@ -10,8 +10,6 @@ import Data.List as L
 import Test.StrongCheck.Arbitrary as A
 import Test.StrongCheck.Gen as Gen
 
-import Debug.Trace as DT
-
 data UnaryOperator
   = Not
   | Exists

@@ -3,7 +3,6 @@ module SqlSquare.Constructors where
 import Prelude
 
 import Data.Array as Arr
-import Data.DateTime as DT
 import Data.Json.Extended.Signature (EJsonF(..), EJsonMap(..))
 import Data.Foldable as F
 import Data.HugeNum as HN
@@ -32,15 +31,6 @@ num i = embed $ Literal $ Decimal $ HN.fromNumber i
 
 string ∷ ∀ t. Corecursive t (SqlF EJsonF) ⇒ String → t
 string s = embed $ Literal $ String s
-
-date ∷ ∀ t. Corecursive t (SqlF EJsonF) ⇒ DT.Date → t
-date d = embed $ Literal $ Date d
-
-time ∷ ∀ t. Corecursive t (SqlF EJsonF) ⇒ DT.Time → t
-time t = embed $ Literal $ Time t
-
-timestamp ∷ ∀ t. Corecursive t (SqlF EJsonF) ⇒ DT.DateTime → t
-timestamp dt = embed $ Literal $ Timestamp dt
 
 unop ∷ ∀ t f. Corecursive t (SqlF f) ⇒ UnaryOperator → t → t
 unop op expr = embed $ Unop { op, expr }
