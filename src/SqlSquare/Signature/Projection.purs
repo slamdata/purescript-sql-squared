@@ -1,4 +1,4 @@
-module SqlSquare.Projection where
+module SqlSquare.Signature.Projection where
 
 import Prelude
 

@@ -1,4 +1,4 @@
-module SqlSquare.OrderType where
+module SqlSquare.Signature.OrderType where
 
 import Prelude
 

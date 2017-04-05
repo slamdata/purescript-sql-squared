@@ -1,4 +1,4 @@
-module SqlSquare.UnaryOperator where
+module SqlSquare.Signature.UnaryOperator where
 
 import Prelude
 
@@ -85,3 +85,20 @@ instance arbitaryUnaryOperator ∷ A.Arbitrary UnaryOperator where
       : FlattenArrayIndices : FlattenArrayValues
       : ShiftArrayIndices : ShiftArrayValues
       : UnshiftArray : L.Nil
+
+printUnaryOperator ∷ String → UnaryOperator → String
+printUnaryOperator expr = case _ of
+  Not → "NOT " <> expr
+  Exists → "EXISTS " <> expr
+  Positive → "+" <> expr
+  Negative → "-" <> expr
+  Distinct → "DISTINCT " <> expr
+  FlattenMapKeys → expr <> "{*:}"
+  FlattenMapValues → expr <> "{*}"
+  ShiftMapKeys → expr <> "{_: }"
+  ShiftMapValues → expr <> "{_}"
+  FlattenArrayIndices → expr <> "[*:]"
+  FlattenArrayValues → expr <> "[*]"
+  ShiftArrayIndices → expr <> "[_:]"
+  ShiftArrayValues → expr <> "[_]"
+  UnshiftArray → "[" <> expr <> "...]"

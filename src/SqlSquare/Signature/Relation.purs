@@ -1,4 +1,4 @@
-module SqlSquare.Relation where
+module SqlSquare.Signature.Relation where
 
 import Prelude
 
@@ -15,7 +15,8 @@ import Data.Path.Pathy as Pt
 
 import Matryoshka (Algebra, CoalgebraM)
 
-import SqlSquare.JoinType as JT
+import SqlSquare.Signature.JoinType as JT
+
 import SqlSquare.Utils ((∘))
 
 import Test.StrongCheck.Arbitrary as SC

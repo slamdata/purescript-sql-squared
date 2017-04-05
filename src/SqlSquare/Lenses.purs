@@ -12,7 +12,7 @@ import Data.NonEmpty as NE
 
 import Matryoshka (class Recursive, class Corecursive, embed, project)
 
-import SqlSquare.AST as S
+import SqlSquare.Signature as S
 import SqlSquare.Utils (type (×), (∘), (⋙))
 
 _GroupBy ∷ ∀ a. Iso' (S.GroupBy a) {keys ∷ L.List a, having ∷ M.Maybe a}

@@ -1,4 +1,4 @@
-module SqlSquare.Case where
+module SqlSquare.Signature.Case where
 
 import Prelude
 

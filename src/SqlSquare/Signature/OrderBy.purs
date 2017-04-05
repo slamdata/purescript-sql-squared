@@ -1,4 +1,4 @@
-module SqlSquare.OrderBy where
+module SqlSquare.Signature.OrderBy where
 
 import Prelude
 
@@ -12,7 +12,8 @@ import Data.NonEmpty as NE
 
 import Matryoshka (Algebra, CoalgebraM)
 
-import SqlSquare.OrderType as OT
+import SqlSquare.Signature.OrderType as OT
+
 import SqlSquare.Utils ((×), type (×))
 
 import Test.StrongCheck.Arbitrary as SC

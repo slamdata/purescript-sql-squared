@@ -1,4 +1,4 @@
-module SqlSquare.AST
+module SqlSquare.Signature
   ( BinopR
   , UnopR
   , InvokeFunctionR
@@ -7,109 +7,62 @@ module SqlSquare.AST
   , LetR
   , SelectR
   , SqlF(..)
-  , Sql
-  , printF
-  , print
-  , encodeJson
-  , decodeJson
-  , arbitrarySqlOfSize
+  , printSqlF
+  , encodeJsonSqlF
+  , decodeJsonSqlF
+  , arbitrarySqlF
   , module SqlSquare.Utils
   , module OT
   , module JT
-  , module SqlSquare.BinaryOperator
-  , module SqlSquare.UnaryOperator
-  , module SqlSquare.GroupBy
-  , module SqlSquare.Case
-  , module SqlSquare.OrderBy
-  , module SqlSquare.Projection
-  , module SqlSquare.Relation
+  , module BO
+  , module UO
+  , module GB
+  , module CS
+  , module OB
+  , module PR
+  , module RL
   ) where
 
 import Prelude
 
-import Control.Alt ((<|>))
-import Control.Lazy as Lazy
-
-import Data.Array as A
 import Data.Argonaut as J
 import Data.Either as E
 import Data.Eq (class Eq1, eq1)
 import Data.Int as Int
 import Data.Foldable as F
 import Data.Traversable as T
-import Data.Functor.Mu (Mu)
+
 import Data.List as L
-import Data.NonEmpty as NE
-import Data.Maybe (Maybe(..), isJust)
+import Data.Maybe (Maybe(..))
 import Data.Monoid (mempty)
 import Data.Ord (class Ord1, compare1)
-import Data.String as S
 
-import Data.Json.Extended.Signature (EJsonF, renderEJsonF, encodeJsonEJsonF, decodeJsonEJsonF, arbitraryEJsonF, parseEJsonF)
+import Matryoshka (Algebra, CoalgebraM)
 
 import SqlSquare.Utils (type (×), (×), (∘), (⋙))
-import SqlSquare.OrderType as OT
-import SqlSquare.JoinType as JT
-import SqlSquare.BinaryOperator (BinaryOperator(..))
-import SqlSquare.UnaryOperator (UnaryOperator(..))
-import SqlSquare.GroupBy
-  ( GroupBy(..)
-  , printGroupBy
-  , arbitraryGroupBy
-  , encodeJsonGroupBy
-  , decodeJsonGroupBy)
-import SqlSquare.Case
-  ( Case(..)
-  , printCase
-  , arbitraryCase
-  , encodeJsonCase
-  , decodeJsonCase)
-import SqlSquare.OrderBy
-  ( OrderBy(..)
-  , printOrderBy
-  , arbitraryOrderBy
-  , encodeJsonOrderBy
-  , decodeJsonOrderBy)
-import SqlSquare.Projection
-  ( Projection(..)
-  , printProjection
-  , arbitraryProjection
-  , encodeJsonProjection
-  , decodeJsonProjection)
-import SqlSquare.Relation
-  ( Relation(..)
-  , printRelation
-  , arbitraryRelation
-  , FUPath
-  , JoinRelR
-  , ExprRelR
-  , TableRelR
-  , VariRelR
-  , IdentRelR
-  , encodeJsonRelation
-  , decodeJsonRelation)
-import SqlSquare.OrderType (OrderType(..))
 
-import Matryoshka (Algebra, cata, CoalgebraM, anaM, embed)
+import SqlSquare.Signature.BinaryOperator as BO
+import SqlSquare.Signature.Case as CS
+import SqlSquare.Signature.GroupBy as GB
+import SqlSquare.Signature.JoinType as JT
+import SqlSquare.Signature.OrderBy as OB
+import SqlSquare.Signature.OrderType as OT
+import SqlSquare.Signature.Projection as PR
+import SqlSquare.Signature.Relation as RL
+import SqlSquare.Signature.UnaryOperator as UO
 
 import Test.StrongCheck.Arbitrary as SC
 import Test.StrongCheck.Gen as Gen
 
-import Text.Parsing.Parser as P
-import Text.Parsing.Parser.Combinators as PC
-import Text.Parsing.Parser.String as PS
-
-import Unsafe.Coerce (unsafeCoerce)
-
 type BinopR a =
   { lhs ∷ a
   , rhs ∷ a
-  , op ∷ BinaryOperator
+  , op ∷ BO.BinaryOperator
   }
 
 type UnopR a =
   { expr ∷ a
-  , op ∷ UnaryOperator
+  , op ∷ UO.UnaryOperator
   }
 
 type InvokeFunctionR a =
@@ -119,12 +72,12 @@ type InvokeFunctionR a =
 
 type MatchR a =
   { expr ∷ a
-  , cases ∷ L.List (Case a)
+  , cases ∷ L.List (CS.Case a)
   , else_ ∷ Maybe a
   }
 
 type SwitchR a =
-  { cases ∷ L.List (Case a)
+  { cases ∷ L.List (CS.Case a)
   , else_ ∷ Maybe a
   }
 
@@ -136,11 +89,11 @@ type LetR a =
 
 type SelectR a =
   { isDistinct ∷  Boolean
-  , projections ∷ L.List (Projection a)
-  , relations ∷ Maybe (Relation a)
+  , projections ∷ L.List (PR.Projection a)
+  , relations ∷ Maybe (RL.Relation a)
   , filter ∷ Maybe a
-  , groupBy ∷ Maybe (GroupBy a)
-  , orderBy ∷ Maybe (OrderBy a)
+  , groupBy ∷ Maybe (GB.GroupBy a)
+  , orderBy ∷ Maybe (OB.OrderBy a)
   }
 
 data SqlF literal a
@@ -261,7 +214,7 @@ instance ord1SqlF ∷ Ord1 l ⇒ Ord1 (SqlF l) where
     <> compare r.orderBy rr.orderBy
     <> compare r.groupBy rr.groupBy
 
-derive instance functorAST ∷ Functor l ⇒ Functor (SqlF l)
+derive instance functorSIG ∷ Functor l ⇒ Functor (SqlF l)
 
 instance foldableSqlF ∷ F.Foldable l ⇒ F.Foldable (SqlF l) where
   foldMap f = case _ of
@@ -380,57 +333,20 @@ instance traversableSqlF ∷ T.Traversable l ⇒ T.Traversable (SqlF l) where
       <*> T.traverse (T.traverse f) orderBy
   sequence = T.sequenceDefault
 
-printF ∷ ∀ l. Algebra l String → Algebra (SqlF l) String
-printF printLiteralF = case _ of
-  Splice Nothing → "*"
-  Splice (Just s) → s <> ".*"
-  SetLiteral lst → "(" <> F.intercalate ", " lst <> ")"
-  Literal l → printLiteralF l
-  Binop {lhs, rhs, op} → case op of
-    IfUndefined → lhs <> " ?? " <> rhs
-    Range → lhs <> " .. " <> rhs
-    Or → lhs <> " OR " <> rhs
-    And → lhs <> " AND " <> rhs
-    Eq → lhs <> " = " <> rhs
-    Neq → lhs <> " <> " <> rhs
-    Ge → lhs <> " >= " <> rhs
-    Gt → lhs <> " > " <> rhs
-    Le → lhs <> " <= " <> rhs
-    Lt → lhs <> " < " <> rhs
-    Concat → lhs <> " || " <> rhs
-    Plus → lhs <> " + " <> rhs
-    Minus → lhs <> " - " <> rhs
-    Mult → lhs <> " * " <> rhs
-    Div → lhs <> " / " <> rhs
-    Mod → lhs <> " % " <> rhs
-    Pow → lhs <> " ^ " <> rhs
-    In → lhs <> " IN " <> rhs
-    FieldDeref → lhs <> "." <> rhs
-    IndexDeref → lhs <> "[" <> rhs <> "]"
-    Limit → lhs <> " LIMIT " <> rhs
-    Offset → lhs <> " OFFSET " <> rhs
-    Sample → lhs <> " SAMPLE " <> rhs
-    Union → lhs <> " UNION " <> rhs
-    UnionAll → lhs <> " UNION ALL " <> rhs
-    Intersect → lhs <> " INTERSECT " <> rhs
-    IntersectAll → lhs <> " INTERSECT ALL " <> rhs
-    Except → lhs <> " EXCEPT " <> rhs
-    UnshiftMap → "{" <> lhs <> ": " <> rhs <> "...}"
-  Unop {expr, op} → case op of
-    Not → "NOT " <> expr
-    Exists → "EXISTS " <> expr
-    Positive → "+" <> expr
-    Negative → "-" <> expr
-    Distinct → "DISTINCT " <> expr
-    FlattenMapKeys → expr <> "{*:}"
-    FlattenMapValues → expr <> "{*}"
-    ShiftMapKeys → expr <> "{_: }"
-    ShiftMapValues → expr <> "{_}"
-    FlattenArrayIndices → expr <> "[*:]"
-    FlattenArrayValues → expr <> "[*]"
-    ShiftArrayIndices → expr <> "[_:]"
-    ShiftArrayValues → expr <> "[_]"
-    UnshiftArray → "[" <> expr <> "...]"
+printSqlF ∷ ∀ l. Algebra l String → Algebra (SqlF l) String
+printSqlF printLiteralF = case _ of
+  Splice Nothing →
+    "*"
+  Splice (Just s) →
+    s <> ".*"
+  SetLiteral lst →
+    "(" <> F.intercalate ", " lst <> ")"
+  Literal l →
+    printLiteralF l
+  Binop {lhs, rhs, op} →
+    BO.printBinaryOperator lhs rhs op
+  Unop {expr, op} →
+    UO.printUnaryOperator expr op
   Ident s →
     "`" <> s <> "`"
   InvokeFunction {name, args} →
@@ -438,11 +354,11 @@ printF printLiteralF = case _ of
   Match { expr, cases, else_ } →
     "CASE "
     <> expr
-    <> F.intercalate " " (map printCase cases)
+    <> F.intercalate " " (map CS.printCase cases)
     <> F.foldMap (" ELSE " <> _) else_
   Switch { cases, else_ } →
     "CASE "
-    <> F.intercalate " " (map printCase cases)
+    <> F.intercalate " " (map CS.printCase cases)
     <> F.foldMap (" ELSE " <> _) else_
   Let { ident, bindTo, in_ } →
     ident <> " := " <> bindTo <> "; " <> in_
@@ -451,19 +367,14 @@ printF printLiteralF = case _ of
   Select { isDistinct, projections, relations, filter, groupBy, orderBy } →
     "SELECT "
     <> (if isDistinct then "DISTINCT " else "")
-    <> (F.intercalate ", " $ map printProjection projections)
+    <> (F.intercalate ", " $ map PR.printProjection projections)
     <> (relations # F.foldMap \rs →
-         " FROM " <> printRelation rs)
+         " FROM " <> RL.printRelation rs)
     <> (filter # F.foldMap \f → " WHERE " <> f)
-    <> (groupBy # F.foldMap \gb → " GROUP BY " <> printGroupBy gb)
-    <> (orderBy # F.foldMap \ob → " ORDER BY " <> printOrderBy ob)
+    <> (groupBy # F.foldMap \gb → " GROUP BY " <> GB.printGroupBy gb)
+    <> (orderBy # F.foldMap \ob → " ORDER BY " <> OB.printOrderBy ob)
   Parens t →
     "(" <> t <> ")"
-
-type Sql = Mu (SqlF EJsonF)
-
-print ∷ Sql → String
-print = cata (printF renderEJsonF)
 
 encodeJsonSqlF ∷ ∀ l. Algebra l J.Json → Algebra (SqlF l) J.Json
 encodeJsonSqlF alg = case _ of
@@ -502,12 +413,12 @@ encodeJsonSqlF alg = case _ of
   Match { expr, cases, else_ } →
     "tag" J.:= "match"
     J.~> "expr" J.:= expr
-    J.~> "cases" J.:= map encodeJsonCase cases
+    J.~> "cases" J.:= map CS.encodeJsonCase cases
     J.~> "else_" J.:= else_
     J.~> J.jsonEmptyObject
   Switch { cases, else_ } →
     "tag" J.:= "switch"
-    J.~> "cases" J.:= map encodeJsonCase cases
+    J.~> "cases" J.:= map CS.encodeJsonCase cases
     J.~> "else_" J.:= else_
     J.~> J.jsonEmptyObject
   Let { ident, bindTo, in_ } →
@@ -523,11 +434,11 @@ encodeJsonSqlF alg = case _ of
   Select { isDistinct, projections, relations, filter, groupBy, orderBy } →
     "tag" J.:= "select"
     J.~> "isDistinct" J.:= isDistinct
-    J.~> "projections" J.:= map encodeJsonProjection projections
-    J.~> "relations" J.:= map encodeJsonRelation relations
+    J.~> "projections" J.:= map PR.encodeJsonProjection projections
+    J.~> "relations" J.:= map RL.encodeJsonRelation relations
     J.~> "filter" J.:= filter
-    J.~> "groupBy" J.:= map encodeJsonGroupBy groupBy
-    J.~> "orderBy" J.:= map encodeJsonOrderBy orderBy
+    J.~> "groupBy" J.:= map GB.encodeJsonGroupBy groupBy
+    J.~> "orderBy" J.:= map OB.encodeJsonOrderBy orderBy
     J.~> J.jsonEmptyObject
   Parens a →
     "tag" J.:= "parens"
@@ -592,12 +503,12 @@ decodeJsonSqlF coalg = J.decodeJson >=> \obj → do
 
   decodeMatch obj = do
     expr ← obj J..? "expr"
-    cases ← (obj J..? "cases") >>= T.traverse decodeJsonCase
+    cases ← (obj J..? "cases") >>= T.traverse CS.decodeJsonCase
     else_ ← obj J..? "else_"
     pure $ Match { expr, cases, else_ }
 
   decodeSwitch obj = do
-   cases ← (obj J..? "cases") >>= T.traverse decodeJsonCase
+   cases ← (obj J..? "cases") >>= T.traverse CS.decodeJsonCase
    else_ ← obj J..? "else_"
    pure $ Switch { cases, else_ }
 
@@ -613,22 +524,18 @@ decodeJsonSqlF coalg = J.decodeJson >=> \obj → do
 
   decodeSelect obj = do
     isDistinct ← obj J..? "isDistinct"
-    projections ← (obj J..? "projections") >>= T.traverse decodeJsonProjection
-    relations ← (obj J..? "relations") >>= T.traverse decodeJsonRelation
+    projections ← (obj J..? "projections") >>= T.traverse PR.decodeJsonProjection
+    relations ← (obj J..? "relations") >>= T.traverse RL.decodeJsonRelation
     filter ← obj J..? "filter"
-    groupBy ← (obj J..? "groupBy") >>= T.traverse decodeJsonGroupBy
-    orderBy ← (obj J..? "orderBy") >>= T.traverse decodeJsonOrderBy
+    groupBy ← (obj J..? "groupBy") >>= T.traverse GB.decodeJsonGroupBy
+    orderBy ← (obj J..? "orderBy") >>= T.traverse OB.decodeJsonOrderBy
     pure $ Select { isDistinct, projections, relations, filter, groupBy, orderBy }
 
   decodeParens obj = do
     v ← obj J..? "value"
     pure $ Parens v
 
-encodeJson ∷ Sql → J.Json
-encodeJson = cata $ encodeJsonSqlF encodeJsonEJsonF
 
-decodeJson ∷ J.Json → E.Either String Sql
-decodeJson = anaM $ decodeJsonSqlF decodeJsonEJsonF
 
 arbitrarySqlF
   ∷ ∀ l
@@ -678,7 +585,7 @@ arbitrarySqlF genLiteral n
     len ← Gen.chooseInt 0 $ n - 1
     let
       foldFn acc _ = do
-        cs ← arbitraryCase $ n - 1
+        cs ← CS.arbitraryCase $ n - 1
         pure $ cs L.: acc
     cases ← L.foldM foldFn L.Nil $ L.range 0 len
     pure $ Match { expr: n - 1
@@ -690,7 +597,7 @@ arbitrarySqlF genLiteral n
     len ← Gen.chooseInt 0 $ n - 1
     let
       foldFn acc _ = do
-        cs ← arbitraryCase $ n - 1
+        cs ← CS.arbitraryCase $ n - 1
         pure $ cs L.: acc
     cases ← L.foldM foldFn L.Nil $ L.range 0 len
     pure $ Switch { cases
@@ -714,7 +621,7 @@ arbitrarySqlF genLiteral n
 
     let
       foldPrj acc _ = do
-        prj ← arbitraryProjection $ n - 1
+        prj ← PR.arbitraryProjection $ n - 1
         pure $ prj L.:acc
     projections ←
       L.foldM foldPrj L.Nil $ L.range 0 prjLen
@@ -722,17 +629,17 @@ arbitrarySqlF genLiteral n
     relations ←
       if mbRelation
         then pure Nothing
-        else map Just $ arbitraryRelation $ n - 1
+        else map Just $ RL.arbitraryRelation $ n - 1
 
     groupBy ←
       if mbGroupBy
         then pure Nothing
-        else map Just $ arbitraryGroupBy $ n - 1
+        else map Just $ GB.arbitraryGroupBy $ n - 1
 
     orderBy ←
       if mbOrderBy
         then pure Nothing
-        else map Just $ arbitraryOrderBy $ n - 1
+        else map Just $ OB.arbitraryOrderBy $ n - 1
 
     pure $ Select { isDistinct
                   , projections
@@ -741,220 +648,3 @@ arbitrarySqlF genLiteral n
                   , groupBy
                   , orderBy
                   }
-
-arbitrarySqlOfSize ∷ Int → Gen.Gen Sql
-arbitrarySqlOfSize = anaM $ arbitrarySqlF arbitraryEJsonF
-
-parseSql ∷ ∀ m. Monad m ⇒ P.ParserT String m Sql
-parseSql = Lazy.fix $ \f → map embed $ parseSqlF parseEJsonF f
-
-parseSqlF
-  ∷ ∀ m a l
-  . Monad m
-  ⇒ (P.ParserT String m a → P.ParserT String m (l a))
-  → P.ParserT String m a
-  → P.ParserT String m (SqlF l a)
-parseSqlF litParserCb cb =
-  (PC.try $ parseLiteral cb)
-  <|> (PC.try $ parseLet cb)
-  <|> (PC.try $ parseSelect cb)
-  <|> (PC.try parseVariable)
-  <|> (PC.try $ parseSplice cb)
-  <|> (PC.try $ parseIdent)
-  <|> (PC.try $ parseInvokeFunction cb)
-  <|> (PC.try $ parseParens cb)
-  <|> (PC.try $ parseUnaryOperator cb)
-  <|> (PC.try $ parseBinaryOperator cb)
-  <|> (PC.try $ parseSwitch cb)
-
-  where
-  parseLiteral r = map Literal $ litParserCb r
-
-  parseLet r = do
-    i ← identParser
-    PS.string ":="
-    bindTo ← r
-    PS.string ";"
-    in_ ← r
-    pure $ Let { ident: i, bindTo, in_ }
-
-  parseSelect r = do
-    PS.string "select"
-    PS.skipSpaces
-    isDistinct ← map isJust $ PC.optionMaybe (PS.string "distinct")
-    projections ← flip PC.sepBy (PS.string ",") do
-      PS.skipSpaces
-      parseProjection r
-
-    relations ← PC.optionMaybe do
-      PS.skipSpaces
-      PS.string "from"
-      PS.skipSpaces
-      parseRelation r
-    filter ← PC.optionMaybe do
-      PS.string "where"
-      PS.skipSpaces
-      r
-    groupBy ← PC.optionMaybe do
-      PS.string "group by"
-      PS.skipSpaces
-      parseGroupBy r
-    orderBy ← PC.optionMaybe do
-      PS.string "order by"
-      PS.skipSpaces
-      parseOrderBy r
-    pure $ Select { isDistinct, projections, relations, filter, groupBy, orderBy }
-
-  parseProjection r = do
-    expr ← r
-    alias ← PC.optionMaybe do
-      PS.skipSpaces
-      PS.string "as"
-      PS.skipSpaces
-      identParser
-    pure $ Projection { expr, alias }
-
-  parseRelation r = do
-    (PC.try $ parseExprRelation r)
-    <|> (PC.try $ parseVariRelation)
-    <|> (PC.try $ parseTableRelation)
-    <|> (PC.try $ parseJoinRelation r)
-    <|> (parseIdentRelation)
-
-  parseExprRelation r = do
-    PS.string "("
-    PS.skipSpaces
-    expr ← r
-    PS.skipSpaces
-    aliasName ← identParser
-    pure $ ExprRelation { expr, aliasName }
-
-  parseVariRelation = do
-    PS.string ":"
-    vari ← identParser
-    PS.skipSpaces
-    alias ← PC.optionMaybe identParser
-    pure $ VariRelation { vari, alias }
-
-  parseIdentRelation = do
-    ident ← identParser
-    PS.skipSpaces
-    alias ← PC.optionMaybe identParser
-    pure $ IdentRelation { ident, alias }
-
-  parseTableRelation = do
-    ident ← identParser
-    PS.skipSpaces
-    alias ← PC.optionMaybe identParser
-    pure $ TableRelation { tablePath: unsafeCoerce unit, alias }
-
-  parseJoinRelation r = do
-    left ← parseRelation r
-    PS.skipSpaces
-    joinType ← parseJoinType
-    right ← parseRelation r
-    clause ← r
-    pure $ JoinRelation { left, right, joinType, clause }
-
-  parseJoinType = do
-    ((PC.try $ PS.string "left join") $> JT.LeftJoin)
-    <|> ((PC.try $ PS.string "right join") $> JT.RightJoin)
-    <|> ((PC.try $ PS.string "full join") $> JT.FullJoin)
-    <|> ((PC.try $ PS.string "inner join") $> JT.InnerJoin)
-    <|> (PS.string "join" $> JT.FullJoin)
-
-  parseGroupBy r = do
-    keys ← PC.sepBy1 r $ PS.skipSpaces *> PS.string ","
-    PS.skipSpaces
-    having ← PC.optionMaybe do
-      PS.string "having"
-      PS.skipSpaces
-      r
-    pure $ GroupBy { keys, having }
-
-  parseOrderBy ∷ P.ParserT String m a → P.ParserT String m (OrderBy a)
-  parseOrderBy r = do
-    head ← parseOneOB r
-    PS.skipSpaces
-    PC.optional $ PS.string ","
-    PS.skipSpaces
-    tail ← PC.sepBy (parseOneOB r) $ PS.skipSpaces *> PS.string ","
-    pure $ OrderBy $ head NE.:| tail
-
-  parseOneOB r = do
-    ot ← parseOrderType
-    v ← r
-    pure $ ot × v
-
-  parseOrderType =
-    (PS.string "ASC" $> ASC)
-    <|> (PS.string "DESC" $> DESC)
-
-  parseVariable = do
-    PS.string ":"
-    ident ← identParser
-    pure $ Vari ident
-
-  parseSplice r = do
-    PS.string "*"
-    mbTail ← PC.optionMaybe do
-      PS.string "."
-      r
-    pure $ Splice mbTail
-
-  parseIdent = map Ident identParser
-
-  parseInvokeFunction r = do
-    name ← identParser
-    PS.string "("
-    args ← PC.sepBy r $ PS.string ","
-    PS.string ")"
-    pure $ InvokeFunction { name, args }
-
-  parseParens r = do
-    PS.string "("
-    lst ← PC.sepBy r $ PS.string ","
-    case lst of
-      L.Cons a L.Nil → pure $ Parens a
-      xs → pure $ SetLiteral xs
-
-  parseSwitch r = do
-    PS.string "case"
-    PS.skipSpaces
-    mbExpr ← PC.optionMaybe r
-    PS.skipSpaces
-    cases ← L.some $ parseCase r
-    else_ ← PC.optionMaybe do
-      PS.skipSpaces
-      PS.string "else"
-      PS.skipSpaces
-      r
-    PS.string "end"
-    pure case mbExpr of
-      Nothing → Switch { cases, else_ }
-      Just expr → Match { expr, cases, else_ }
-
-  parseCase r = do
-    PS.skipSpaces
-    PS.string "when"
-    cond ← r
-    PS.skipSpaces
-    PS.string "then"
-    PS.skipSpaces
-    expr ← r
-    pure $ Case { cond, expr }
-
-  parseUnaryOperator r = do
-    pure $ unsafeCoerce unit
-
-  parseBinaryOperator r = do
-    pure $ unsafeCoerce unit
-
-
-identParser ∷ ∀ m. Monad m ⇒ P.ParserT String m String
-identParser =
-  map S.fromCharArray
-  $ (PC.try $ PC.between (PS.string "`") (PS.string "`") $ A.some stringChar)
-  <|> (A.some stringChar)
-  where
-  stringChar = PS.noneOf [ '`' ]

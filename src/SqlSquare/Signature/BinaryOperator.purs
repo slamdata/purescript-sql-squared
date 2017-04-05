@@ -1,4 +1,4 @@
-module SqlSquare.BinaryOperator where
+module SqlSquare.Signature.BinaryOperator where
 
 import Prelude
 
@@ -131,3 +131,35 @@ instance arbitraryBinaryOperator ∷ A.Arbitrary BinaryOperator where
       : In : FieldDeref : IndexDeref : Limit : Offset
       : Sample : Union : UnionAll : Intersect
       : IntersectAll : Except : UnshiftMap : L.Nil
+
+printBinaryOperator ∷ String → String → BinaryOperator → String
+printBinaryOperator lhs rhs = case _ of
+  IfUndefined → lhs <> " ?? " <> rhs
+  Range → lhs <> " .. " <> rhs
+  Or → lhs <> " OR " <> rhs
+  And → lhs <> " AND " <> rhs
+  Eq → lhs <> " = " <> rhs
+  Neq → lhs <> " <> " <> rhs
+  Ge → lhs <> " >= " <> rhs
+  Gt → lhs <> " > " <> rhs
+  Le → lhs <> " <= " <> rhs
+  Lt → lhs <> " < " <> rhs
+  Concat → lhs <> " || " <> rhs
+  Plus → lhs <> " + " <> rhs
+  Minus → lhs <> " - " <> rhs
+  Mult → lhs <> " * " <> rhs
+  Div → lhs <> " / " <> rhs
+  Mod → lhs <> " % " <> rhs
+  Pow → lhs <> " ^ " <> rhs
+  In → lhs <> " IN " <> rhs
+  FieldDeref → lhs <> "." <> rhs
+  IndexDeref → lhs <> "[" <> rhs <> "]"
+  Limit → lhs <> " LIMIT " <> rhs
+  Offset → lhs <> " OFFSET " <> rhs
+  Sample → lhs <> " SAMPLE " <> rhs
+  Union → lhs <> " UNION " <> rhs
+  UnionAll → lhs <> " UNION ALL " <> rhs
+  Intersect → lhs <> " INTERSECT " <> rhs
+  IntersectAll → lhs <> " INTERSECT ALL " <> rhs
+  Except → lhs <> " EXCEPT " <> rhs
+  UnshiftMap → "{" <> lhs <> ": " <> rhs <> "...}"

@@ -1,4 +1,4 @@
-module SqlSquare.GroupBy where
+module SqlSquare.Signature.GroupBy where
 
 import Prelude
 
