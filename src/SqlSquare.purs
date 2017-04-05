@@ -14,7 +14,7 @@ import Prelude
 import Data.Argonaut as J
 import Data.Either (Either)
 import Data.Functor.Mu (Mu)
-import Data.Json.Extended.Signature as EJ
+import Data.Json.Extended as EJ
 
 import Matryoshka (cata, anaM)
 

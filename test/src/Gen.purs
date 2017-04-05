@@ -15,8 +15,6 @@ import Test.StrongCheck.Arbitrary as A
 
 import SqlSquare (Sql, arbitrarySqlOfSize, decodeJson, encodeJson, print)
 
-import Debug.Trace as DT
-
 newtype ArbSql = ArbSql Sql
 
 instance arbitraryArbSql ∷ A.Arbitrary ArbSql where
@@ -29,6 +27,7 @@ testJsonSerialization =
       res == sql <?> "Mismatch:\n" <> print sql <> "\n" <> print res
     E.Left err →
       SC.Failed $ "Argonaut codecs  error: " <> err <> " \n" <> print sql
+
 
 type TestEffects r =
   ( err ∷ EXCEPTION
