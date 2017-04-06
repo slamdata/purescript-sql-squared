@@ -93,12 +93,12 @@ printUnaryOperator expr = case _ of
   Positive → "+" <> expr
   Negative → "-" <> expr
   Distinct → "DISTINCT " <> expr
-  FlattenMapKeys → expr <> "{*:}"
-  FlattenMapValues → expr <> "{*}"
-  ShiftMapKeys → expr <> "{_: }"
-  ShiftMapValues → expr <> "{_}"
-  FlattenArrayIndices → expr <> "[*:]"
-  FlattenArrayValues → expr <> "[*]"
-  ShiftArrayIndices → expr <> "[_:]"
-  ShiftArrayValues → expr <> "[_]"
+  FlattenMapKeys → expr <> ".{*:}"
+  FlattenMapValues → expr <> ".{*}"
+  ShiftMapKeys → expr <> ".{_: }"
+  ShiftMapValues → expr <> ".{_}"
+  FlattenArrayIndices → expr <> ".[*:]"
+  FlattenArrayValues → expr <> ".[*]"
+  ShiftArrayIndices → expr <> ".[_:]"
+  ShiftArrayValues → expr <> ".[_]"
   UnshiftArray → "[" <> expr <> "...]"

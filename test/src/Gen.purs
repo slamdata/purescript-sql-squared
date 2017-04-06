@@ -13,7 +13,7 @@ import Test.StrongCheck ((<?>))
 import Test.StrongCheck as SC
 import Test.StrongCheck.Arbitrary as A
 
-import SqlSquare (Sql, arbitrarySqlOfSize, decodeJson, encodeJson, print)
+import SqlSquare (Sql, arbitrarySqlOfSize, decodeJson, encodeJson, print, tokenize)
 
 newtype ArbSql = ArbSql Sql
 
@@ -27,6 +27,14 @@ testJsonSerialization =
       res == sql <?> "Mismatch:\n" <> print sql <> "\n" <> print res
     E.Left err →
       SC.Failed $ "Argonaut codecs  error: " <> err <> " \n" <> print sql
+
+testTokenizer ∷ ∀ r. Eff (TestEffects r) Unit
+testTokenizer =
+  SC.quickCheck' 50 \(ArbSql sql) → case tokenize $ print sql of
+    E.Left err →
+      SC.Failed $ "Tokenizer  error: " <> show err <> " \n" <> print sql
+    E.Right _ →
+      SC.Success
 
 
 type TestEffects r =
@@ -61,3 +69,36 @@ test = do
   testJsonSerialization
   testJsonSerialization
   testJsonSerialization
+
+  testTokenizer
+  testTokenizer
+  testTokenizer
+  testTokenizer
+  testTokenizer
+  testTokenizer
+  testTokenizer
+  testTokenizer
+  testTokenizer
+  testTokenizer
+  testTokenizer
+  testTokenizer
+  testTokenizer
+  testTokenizer
+  testTokenizer
+  testTokenizer
+  testTokenizer
+  testTokenizer
+  testTokenizer
+  testTokenizer
+  testTokenizer
+  testTokenizer
+  testTokenizer
+  testTokenizer
+  testTokenizer
+  testTokenizer
+  testTokenizer
+  testTokenizer
+  testTokenizer
+  testTokenizer
+  testTokenizer
+  testTokenizer

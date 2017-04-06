@@ -28,14 +28,14 @@ import Prelude
 import Data.Argonaut as J
 import Data.Either as E
 import Data.Eq (class Eq1, eq1)
-import Data.Int as Int
 import Data.Foldable as F
-import Data.Traversable as T
-
+import Data.Int as Int
 import Data.List as L
 import Data.Maybe (Maybe(..))
 import Data.Monoid (mempty)
 import Data.Ord (class Ord1, compare1)
+import Data.String as S
+import Data.Traversable as T
 
 import Matryoshka (Algebra, CoalgebraM)
 
@@ -361,7 +361,7 @@ printSqlF printLiteralF = case _ of
     <> F.intercalate " " (map CS.printCase cases)
     <> F.foldMap (" ELSE " <> _) else_
   Let { ident, bindTo, in_ } →
-    ident <> " := " <> bindTo <> "; " <> in_
+    "`" <> ident <> "` := " <> bindTo <> "; " <> in_
   Vari s →
     ":" <> s
   Select { isDistinct, projections, relations, filter, groupBy, orderBy } →
@@ -535,8 +535,6 @@ decodeJsonSqlF coalg = J.decodeJson >=> \obj → do
     v ← obj J..? "value"
     pure $ Parens v
 
-
-
 arbitrarySqlF
   ∷ ∀ l
   . CoalgebraM Gen.Gen l Int
@@ -544,8 +542,8 @@ arbitrarySqlF
 arbitrarySqlF genLiteral n
   | n < 2 =
   Gen.oneOf (map Literal $ genLiteral n)
-    [ map Ident SC.arbitrary
-    , map Vari SC.arbitrary
+    [ map Ident genIdent
+    , map Vari genIdent
     , pure $ Splice Nothing
     , pure $ SetLiteral L.Nil
     ]
@@ -576,7 +574,7 @@ arbitrarySqlF genLiteral n
     pure $ Unop { op, expr: n - 1 }
 
   genInvokeFunction = do
-    name ← SC.arbitrary
+    name ← genIdent
     len ← Gen.chooseInt 0 $ n - 1
     pure $ InvokeFunction { name, args: map (const $ n - 1) $ L.range 0 len }
 
@@ -648,3 +646,10 @@ arbitrarySqlF genLiteral n
                   , groupBy
                   , orderBy
                   }
+
+genIdent ∷ Gen.Gen String
+genIdent = do
+  start ←
+    Gen.elements "a" $ L.fromFoldable $ S.split (S.Pattern "") "bcdefghijklmnopqrstuvwxyz"
+  body ← map (Int.toStringAs Int.hexadecimal) SC.arbitrary
+  pure $ start <> body

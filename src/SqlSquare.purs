@@ -7,6 +7,7 @@ module SqlSquare
   , module Sig
   , module Lenses
   , module Constructors
+  , module Parser
   ) where
 
 import Prelude
@@ -21,6 +22,7 @@ import Matryoshka (cata, anaM)
 import SqlSquare.Signature as Sig
 import SqlSquare.Lenses as Lenses
 import SqlSquare.Constructors as Constructors
+import SqlSquare.Parser as Parser
 
 import Test.StrongCheck.Gen as Gen
 
