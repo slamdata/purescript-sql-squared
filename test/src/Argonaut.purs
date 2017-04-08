@@ -128,10 +128,10 @@ testSuite =
           : "*[1]"
           : "*.`foo`"
           : "*.`foo`[1]"
+          : "*.`foo`[0]"
           : "*.`foo`[0].`bar`"
           : "*.`bar`.`baz`"
           : "*.`bar`"
           : L.Nil
       in
-        Assert.equal "1" "1"
---        Assert.equal expectedFields actualFields
+        Assert.equal expectedFields actualFields

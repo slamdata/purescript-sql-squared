@@ -11,6 +11,7 @@ module SqlSquare.Signature
   , encodeJsonSqlF
   , decodeJsonSqlF
   , arbitrarySqlF
+  , genSql
   , module SqlSquare.Utils
   , module OT
   , module JT
@@ -26,18 +27,22 @@ module SqlSquare.Signature
 import Prelude
 
 import Data.Argonaut as J
+import Data.Array as A
 import Data.Either as E
 import Data.Eq (class Eq1, eq1)
 import Data.Foldable as F
+import Data.Json.Extended as EJ
 import Data.Int as Int
 import Data.List as L
+import Data.List ((:))
+import Data.HugeNum as HN
 import Data.Maybe (Maybe(..))
 import Data.Monoid (mempty)
 import Data.Ord (class Ord1, compare1)
 import Data.String as S
 import Data.Traversable as T
 
-import Matryoshka (Algebra, CoalgebraM)
+import Matryoshka (Algebra, CoalgebraM, class Corecursive, embed)
 
 import SqlSquare.Utils (type (×), (×), (∘), (⋙))
 
@@ -350,7 +355,7 @@ printSqlF printLiteralF = case _ of
   Ident s →
     "`" <> s <> "`"
   InvokeFunction {name, args} →
-    name <> "(" <> F.intercalate "," args <> ")"
+    name <> "(" <> F.intercalate ", " args <> ")"
   Match { expr, cases, else_ } →
     "CASE "
     <> expr
@@ -551,105 +556,214 @@ arbitrarySqlF genLiteral n
   Gen.oneOf (map Literal $ genLiteral n)
     [ pure $ Splice $ Just $ n - 1
     , pure $ Parens $ n - 1
-    , genSetLiteral
-    , genBinop
-    , genUnop
-    , genInvokeFunction
-    , genMatch
-    , genSwitch
-    , genLet
-    , genSelect
+    , genSetLiteral n
+    , genBinop n
+    , genUnop n
+    , genInvokeFunction n
+    , genMatch n
+    , genSwitch n
+    , genLet n
+    , genSelect n
     ]
-  where
-  genSetLiteral = do
-    len ← Gen.chooseInt 0 $ n - 1
-    pure $ SetLiteral $ map (const $ n - 1) $ L.range 0 len
 
-  genBinop = do
-    op ← SC.arbitrary
-    pure $ Binop { op, lhs: n - 1, rhs: n - 1 }
+genSetLiteral ∷ ∀ l. CoalgebraM Gen.Gen (SqlF l) Int
+genSetLiteral n = do
+  len ← Gen.chooseInt 0 $ n - 1
+  pure $ SetLiteral $ map (const $ n - 1) $ L.range 0 len
 
-  genUnop = do
-    op ← SC.arbitrary
-    pure $ Unop { op, expr: n - 1 }
+genBinop ∷ ∀ l. CoalgebraM Gen.Gen (SqlF l) Int
+genBinop n = do
+  op ← SC.arbitrary
+  pure $ Binop { op, lhs: n - 1, rhs: n - 1 }
 
-  genInvokeFunction = do
-    name ← genIdent
-    len ← Gen.chooseInt 0 $ n - 1
-    pure $ InvokeFunction { name, args: map (const $ n - 1) $ L.range 0 len }
+genUnop ∷ ∀ l. CoalgebraM Gen.Gen (SqlF l) Int
+genUnop n = do
+  op ← SC.arbitrary
+  pure $ Unop { op, expr: n - 1 }
 
-  genMatch = do
-    nothing ← SC.arbitrary
-    len ← Gen.chooseInt 0 $ n - 1
-    let
-      foldFn acc _ = do
-        cs ← CS.arbitraryCase $ n - 1
-        pure $ cs L.: acc
-    cases ← L.foldM foldFn L.Nil $ L.range 0 len
-    pure $ Match { expr: n - 1
-                 , cases
-                 , else_: if nothing then Nothing else Just $ n - 1
-                 }
-  genSwitch = do
-    nothing ← SC.arbitrary
-    len ← Gen.chooseInt 0 $ n - 1
-    let
-      foldFn acc _ = do
-        cs ← CS.arbitraryCase $ n - 1
-        pure $ cs L.: acc
-    cases ← L.foldM foldFn L.Nil $ L.range 0 len
-    pure $ Switch { cases
-                  , else_: if nothing then Nothing else Just $ n - 1
-                  }
+genInvokeFunction ∷ ∀ l. CoalgebraM Gen.Gen (SqlF l) Int
+genInvokeFunction n = do
+  name ← genIdent
+  len ← Gen.chooseInt 0 $ n - 1
+  pure $ InvokeFunction { name, args: map (const $ n - 1) $ L.range 0 len }
 
-  genLet = do
-    ident ← map (Int.toStringAs Int.hexadecimal) $ SC.arbitrary
-    pure $ Let { ident
-               , bindTo: n - 1
-               , in_: n - 1
+genMatch ∷ ∀ l. CoalgebraM Gen.Gen (SqlF l) Int
+genMatch n = do
+  nothing ← SC.arbitrary
+  len ← Gen.chooseInt 0 $ n - 1
+  let
+    foldFn acc _ = do
+      cs ← CS.arbitraryCase $ n - 1
+      pure $ cs L.: acc
+  cases ← L.foldM foldFn L.Nil $ L.range 0 len
+  pure $ Match { expr: n - 1
+               , cases
+               , else_: if nothing then Nothing else Just $ n - 1
                }
-  genSelect = do
-    prjLen ← Gen.chooseInt 0 $ n - 1
-    mbRelation ← SC.arbitrary
-    mbFilter ← SC.arbitrary
-    mbGroupBy ← SC.arbitrary
-    mbOrderBy ← SC.arbitrary
+genSwitch ∷ ∀ l. CoalgebraM Gen.Gen (SqlF l) Int
+genSwitch n = do
+  nothing ← SC.arbitrary
+  len ← Gen.chooseInt 0 $ n - 1
+  let
+    foldFn acc _ = do
+      cs ← CS.arbitraryCase $ n - 1
+      pure $ cs L.: acc
+  cases ← L.foldM foldFn L.Nil $ L.range 0 len
+  pure $ Switch { cases
+                , else_: if nothing then Nothing else Just $ n - 1
+                }
 
-    isDistinct ← SC.arbitrary
+genLet ∷ ∀ l. CoalgebraM Gen.Gen (SqlF l) Int
+genLet n = do
+  ident ← genIdent
+  pure $ Let { ident
+             , bindTo: n - 1
+             , in_: n - 1
+             }
 
-    let
-      foldPrj acc _ = do
-        prj ← PR.arbitraryProjection $ n - 1
-        pure $ prj L.:acc
-    projections ←
-      L.foldM foldPrj L.Nil $ L.range 0 prjLen
+genSelect ∷ ∀ l. CoalgebraM Gen.Gen (SqlF l) Int
+genSelect n = do
+  prjLen ← Gen.chooseInt 0 $ n - 1
+  mbRelation ← SC.arbitrary
+  mbFilter ← SC.arbitrary
+  mbGroupBy ← SC.arbitrary
+  mbOrderBy ← SC.arbitrary
+  isDistinct ← SC.arbitrary
 
-    relations ←
-      if mbRelation
-        then pure Nothing
-        else map Just $ RL.arbitraryRelation $ n - 1
+  let
+    foldPrj acc _ = do
+      prj ← PR.arbitraryProjection $ n - 1
+      pure $ prj L.:acc
+  projections ←
+    L.foldM foldPrj L.Nil $ L.range 0 prjLen
 
-    groupBy ←
-      if mbGroupBy
-        then pure Nothing
-        else map Just $ GB.arbitraryGroupBy $ n - 1
+  relations ←
+    if mbRelation
+    then pure Nothing
+    else map Just $ RL.arbitraryRelation $ n - 1
 
-    orderBy ←
-      if mbOrderBy
-        then pure Nothing
-        else map Just $ OB.arbitraryOrderBy $ n - 1
+  groupBy ←
+    if mbGroupBy
+    then pure Nothing
+    else map Just $ GB.arbitraryGroupBy $ n - 1
 
-    pure $ Select { isDistinct
-                  , projections
-                  , relations
-                  , filter: if mbFilter then Nothing else Just $ n - 1
-                  , groupBy
-                  , orderBy
-                  }
+  orderBy ←
+    if mbOrderBy
+    then pure Nothing
+    else map Just $ OB.arbitraryOrderBy $ n - 1
+
+  pure $ Select { isDistinct
+                , projections
+                , relations
+                , filter: if mbFilter then Nothing else Just $ n - 1
+                , groupBy
+                , orderBy
+                }
 
 genIdent ∷ Gen.Gen String
 genIdent = do
   start ←
-    Gen.elements "a" $ L.fromFoldable $ S.split (S.Pattern "") "bcdefghijklmnopqrstuvwxyz"
+    Gen.elements "a"
+    $ L.fromFoldable
+    $ S.split (S.Pattern "") "bcdefghijklmnopqrstuvwxyz"
   body ← map (Int.toStringAs Int.hexadecimal) SC.arbitrary
   pure $ start <> body
+
+
+-- This one is one gigantic TODO: generation Sql² AST that
+-- can be constructed using parsing. Since parsing is
+-- actually ported from quasar, this is very important
+-- but annoying stuff :|
+
+type GenSql t = Corecursive t (SqlF EJ.EJsonF) ⇒ Gen.Gen t
+
+genSql ∷ ∀ t. Int → GenSql t
+genSql n
+  | n < 2 = genLeaf
+  | otherwise =
+    Gen.oneOf (genLetP $ n - 1) [genQueryExprP $ n - 1]
+
+genLeaf ∷ ∀ t. GenSql t
+genLeaf =
+  map (embed ∘ Literal)
+  $ Gen.oneOf (pure $ EJ.Null)
+    [ map EJ.Boolean SC.arbitrary
+    , map EJ.Integer SC.arbitrary
+    , map EJ.Decimal $ map HN.fromNumber SC.arbitrary
+    , map EJ.String SC.arbitrary
+    ]
+
+genLetP ∷ ∀ t. Int → GenSql t
+genLetP n = do
+  ident ← genIdent
+  bindTo ← genSql n
+  in_ ← genSql n
+  pure $ embed $ Let { ident, bindTo, in_ }
+
+
+genQueryExprP ∷ ∀ t. Int → GenSql t
+genQueryExprP n
+  | n < 2 = Gen.oneOf (genQueryP n) [ genDefinedExprP n ]
+  | otherwise = do
+    op ←
+      Gen.elements BO.Limit
+        $ BO.Offset : BO.Sample : BO.Union
+        : BO.UnionAll : BO.Intersect : BO.IntersectAll
+        : BO.Except : L.Nil
+    lhs ← Gen.oneOf (genQueryP n) [ genDefinedExprP n ]
+    rhs ← Gen.oneOf (genQueryP n) [ genDefinedExprP n ]
+    pure $ embed $ Binop { op, lhs, rhs }
+
+genDefinedExprP ∷ ∀ t. Int → GenSql t
+genDefinedExprP n = do
+  binops ← Gen.vectorOf n SC.arbitrary
+  unops ← Gen.vectorOf n SC.arbitrary
+  start ← genPrimaryExprP n
+  adds ← Gen.vectorOf n $ genPrimaryExprP n
+  pure $ F.foldl foldFn start $ A.zip binops $ A.zip unops adds
+  where
+  foldFn acc (binop × unop × rhs) =
+    embed
+    $ Parens
+    $ embed
+    $ Unop
+      { op: unop
+      , expr: embed $ Binop { lhs: acc, rhs, op:binop }
+      }
+
+genPrimaryExprP ∷ ∀ t. Int → GenSql t
+genPrimaryExprP n =
+  Gen.oneOf genLeaf
+    [ genCaseP n
+    , genUnaryP n
+    , genFunctionP n
+    , genSetP n
+    , genArrayP n
+    , genMapP n
+    , genSpliceP n
+    , map (embed ∘ Ident) genIdent
+    ]
+
+genCaseP ∷ ∀ t. Int → GenSql t
+genCaseP n = genLeaf
+
+genUnaryP ∷ ∀ t. Int → GenSql t
+genUnaryP n = genLeaf
+
+genFunctionP ∷ ∀ t. Int → GenSql t
+genFunctionP n = genLeaf
+
+genSetP ∷ ∀ t. Int → GenSql t
+genSetP n = genLeaf
+
+genArrayP ∷ ∀ t. Int → GenSql t
+genArrayP n = genLeaf
+
+genMapP ∷ ∀ t. Int → GenSql t
+genMapP n = genLeaf
+
+genSpliceP ∷ ∀ t. Int → GenSql t
+genSpliceP n = pure $ embed $ Splice Nothing
+
+genQueryP ∷ ∀ t. Int → GenSql t
+genQueryP n = genLeaf

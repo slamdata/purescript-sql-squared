@@ -13,7 +13,7 @@ import Data.Maybe (Maybe(..))
 import Matryoshka (class Corecursive, embed)
 
 import SqlSquare.Signature as Sig
-import SqlSquare.Utils ((∘)) --  (SqlF(..), Relation, GroupBy(..), OrderBy, BinaryOperator, UnaryOperator, (∘), SelectR, Case(..), Projection(..))
+import SqlSquare.Utils ((∘))
 
 vari ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ String → t
 vari s = embed $ Sig.Vari s

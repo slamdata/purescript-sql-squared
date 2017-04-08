@@ -37,19 +37,14 @@ _ExprRelation = prism' S.ExprRelation case _ of
   S.ExprRelation r → M.Just r
   _ → M.Nothing
 
-_TableRelation ∷ ∀ a. Prism' (S.Relation a) (S.TableRelR a)
-_TableRelation = prism' S.TableRelation case _ of
-  S.TableRelation r → M.Just r
-  _ → M.Nothing
-
-_VariRelation ∷ ∀ a. Prism' (S.Relation a) (S.VariRelR a)
+_VariRelation ∷ ∀ a. Prism' (S.Relation a) S.VariRelR
 _VariRelation = prism' S.VariRelation case _ of
   S.VariRelation r → M.Just r
   _ → M.Nothing
 
-_IdentRelation ∷ ∀ a. Prism' (S.Relation a) S.IdentRelR
-_IdentRelation = prism' S.IdentRelation case _ of
-  S.IdentRelation r → M.Just r
+_TableRelation ∷ ∀ a. Prism' (S.Relation a) S.TableRelR
+_TableRelation = prism' S.TableRelation case _ of
+  S.TableRelation r → M.Just r
   _ → M.Nothing
 
 _lhs ∷ ∀ a r. Lens' { lhs ∷ a |r } a

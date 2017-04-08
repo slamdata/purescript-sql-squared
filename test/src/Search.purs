@@ -12,10 +12,11 @@ import Data.Argonaut as JS
 import Data.Either (Either(..), fromRight)
 import Data.Foldable as F
 import Data.Int as Int
+import Data.Either as E
 import Data.Lens ((.~), (?~))
 import Data.List ((:))
 import Data.List as L
-import Data.Maybe (Maybe(..), isJust, fromJust, fromMaybe)
+import Data.Maybe (Maybe(..), isJust, fromMaybe)
 import Data.Newtype (unwrap)
 import Data.Path.Pathy as Pt
 import Data.String as Str
@@ -341,13 +342,13 @@ hasSpecialChars v =
 queryToSql
   ∷ L.List S.Sql
   → SS.SearchQuery
-  → S.FUPath
+  → E.Either (Pt.AbsFile Pt.Sandboxed) (Pt.RelFile Pt.Sandboxed)
   → S.Sql
 queryToSql fs query path =
   S.buildSelect
     $ (S._isDistinct .~ isDistinct)
     ∘ (S._projections .~ topFields)
-    ∘ (S._relations ?~ S.TableRelation { alias: Nothing, tablePath: path })
+    ∘ (S._relations ?~ S.TableRelation { alias: Nothing, path })
     ∘ (S._filter ?~ filter)
   where
   topFields =
@@ -394,23 +395,29 @@ searchQueries =
 
 expectedOutput ∷ L.List String
 expectedOutput =
-  """SELECT DISTINCT *.`bar`, *.`foo` FROM `/mongo/testDb/patients` WHERE (((search(*.`bar`,"^.*ba.*$",true)) OR ((search(*.`foo`,"^.*ba.*$",true))) OR ((search(*.`bar`.`valid`,"^.*ba.*$",true))) OR ((search(*.`bar`.`value`,"^.*ba.*$",true))) OR ((search(*.`foo`[*],"^.*ba.*$",true))) OR ((search(*.`foo`[*],"^.*ba.*$",true)))))"""
-  : """SELECT DISTINCT *.`bar`, *.`foo` FROM `/mongo/testDb/patients` WHERE (((search(`foo`[*],"^.*2.*$",true) OR (`foo`[*] = 2.0) OR (`foo`[*] = 2))))"""
-  : """SELECT *.`bar`, *.`foo` FROM `/mongo/testDb/patients` WHERE (((LOWER(`bar`) > LOWER("1") OR (`bar` > 1.0) OR (`bar` > 1))))"""
-  : """SELECT DISTINCT *.`bar`, *.`foo` FROM `/mongo/testDb/patients` WHERE ((search(*.`bar`,"^.*false.*$",true) OR (*.`bar` = false) OR (search(*.`foo`,"^.*false.*$",true) OR (*.`foo` = false)) OR (search(*.`bar`.`valid`,"^.*false.*$",true) OR (*.`bar`.`valid` = false)) OR (search(*.`bar`.`value`,"^.*false.*$",true) OR (*.`bar`.`value` = false)) OR (search(*.`foo`[*],"^.*false.*$",true) OR (*.`foo`[*] = false)) OR (search(*.`foo`[*],"^.*false.*$",true) OR (*.`foo`[*] = false))))"""
-  : """SELECT *.`bar`, *.`foo` FROM `/mongo/testDb/patients` WHERE (((LOWER(`bar`.`valid`) = LOWER("false") OR (`bar`.`valid` = false))))"""
-  : """SELECT *.`bar`, *.`foo` FROM `/mongo/testDb/patients` WHERE ((((search(`non-existing`,"^.*foo.*$",true)))))"""
-  : L.Nil
+ """SELECT DISTINCT *.`bar`, *.`foo` FROM `/mongo/testDb/patients` WHERE (((search(*.`bar`, "^.*ba.*$", true)) OR ((search(*.`foo`, "^.*ba.*$", true))) OR ((search(*.`bar`.`valid`, "^.*ba.*$", true))) OR ((search(*.`bar`.`value`, "^.*ba.*$", true))) OR ((search(*.`foo`.[*], "^.*ba.*$", true))) OR ((search(*.`foo`.[*], "^.*ba.*$", true)))))"""
+ : """SELECT DISTINCT *.`bar`, *.`foo` FROM `/mongo/testDb/patients` WHERE (((search(`foo`.[*], "^.*2.*$", true) OR (`foo`.[*] = 2.0) OR (`foo`.[*] = 2))))"""
+ : """SELECT *.`bar`, *.`foo` FROM `/mongo/testDb/patients` WHERE (((LOWER(`bar`) > LOWER("1") OR (`bar` > 1.0) OR (`bar` > 1))))"""
+ : """SELECT DISTINCT *.`bar`, *.`foo` FROM `/mongo/testDb/patients` WHERE ((search(*.`bar`, "^.*false.*$", true) OR (*.`bar` = false) OR (search(*.`foo`, "^.*false.*$", true) OR (*.`foo` = false)) OR (search(*.`bar`.`valid`, "^.*false.*$", true) OR (*.`bar`.`valid` = false)) OR (search(*.`bar`.`value`, "^.*false.*$", true) OR (*.`bar`.`value` = false)) OR (search(*.`foo`.[*], "^.*false.*$", true) OR (*.`foo`.[*] = false)) OR (search(*.`foo`.[*], "^.*false.*$", true) OR (*.`foo`.[*] = false))))"""
+ : """SELECT *.`bar`, *.`foo` FROM `/mongo/testDb/patients` WHERE (((LOWER(`bar`.`valid`) = LOWER("false") OR (`bar`.`valid` = false))))"""
+ : """SELECT *.`bar`, *.`foo` FROM `/mongo/testDb/patients` WHERE ((((search(`non-existing`, "^.*foo.*$", true)))))"""
+ : L.Nil
 
-tablePath ∷ S.FUPath
-tablePath = Right $ unsafePartial fromJust $ Pt.parseAbsFile "/mongo/testDb/patients"
+
+tablePath ∷ ∀ a. E.Either (Pt.AbsFile Pt.Sandboxed) a
+tablePath =
+ Left
+ $ Pt.rootDir
+ Pt.</> Pt.dir "mongo"
+ Pt.</> Pt.dir "testDb"
+ Pt.</> Pt.file "patients"
 
 testSuite ∷ ∀ e. TestSuite e
 testSuite =
-  suite "purescript-search interpreter tests" do
-    test "search query is interpreted correctly"
-      let
-         querySqls = map (\sq → queryToSql fields sq tablePath) searchQueries
-         querySqlsStrings = map S.print querySqls
-      in
-        void $ L.zipWithA Assert.equal expectedOutput querySqlsStrings
+ suite "purescript-search interpreter tests" do
+  test "search query is interpreted correctly"
+   let
+     querySqls = map (\sq → queryToSql fields sq tablePath) searchQueries
+     querySqlsStrings = map S.print querySqls
+   in
+    void $ L.zipWithA Assert.equal expectedOutput querySqlsStrings

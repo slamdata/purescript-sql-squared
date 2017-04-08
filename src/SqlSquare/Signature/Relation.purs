@@ -3,14 +3,12 @@ module SqlSquare.Signature.Relation where
 import Prelude
 
 import Data.Argonaut as J
-import Data.Array as A
 import Data.Either (Either(..), either)
-import Data.Int as Int
 import Data.Foldable as F
+import Data.Int as Int
 import Data.Monoid (mempty)
 import Data.Traversable as T
-import Data.Maybe (Maybe)
-import Data.Path.Pathy (AbsFile, RelFile, Unsandboxed, unsafePrintPath, parsePath, (</>))
+import Data.Maybe (Maybe, maybe)
 import Data.Path.Pathy as Pt
 
 import Matryoshka (Algebra, CoalgebraM)
@@ -21,8 +19,6 @@ import SqlSquare.Utils ((∘))
 
 import Test.StrongCheck.Arbitrary as SC
 import Test.StrongCheck.Gen as Gen
-
-type FUPath = Either (RelFile Unsandboxed) (AbsFile Unsandboxed)
 
 type JoinRelR a =
   { left ∷ Relation a
@@ -36,27 +32,25 @@ type ExprRelR a =
   , aliasName ∷ String
   }
 
-type TableRelR a =
-  { tablePath ∷ FUPath
-  , alias ∷ Maybe String
-  }
-
-type VariRelR a =
+type VariRelR =
   { vari ∷ String
   , alias ∷ Maybe String
   }
 
-type IdentRelR =
-  { ident ∷ String
+type TableRelR =
+  -- Quasar uses unsandboxed paths because its table relation
+  -- is produced by precompilation of any identifier relation
+  -- that can fail if paths are incorrect. Here we provide only
+  -- correct paths and omit anything → path step
+  { path ∷ Either (Pt.AbsFile Pt.Sandboxed) (Pt.RelFile Pt.Sandboxed)
   , alias ∷ Maybe String
   }
 
 data Relation a
   = JoinRelation (JoinRelR a)
   | ExprRelation (ExprRelR a)
-  | TableRelation (TableRelR a)
-  | VariRelation (VariRelR a)
-  | IdentRelation IdentRelR
+  | VariRelation VariRelR
+  | TableRelation TableRelR
 
 derive instance functorRelation ∷ Functor Relation
 derive instance eqRelation ∷ Eq a ⇒ Eq (Relation a)
@@ -89,9 +83,8 @@ instance traversableRelation ∷ T.Traversable Relation where
     ExprRelation  { expr, aliasName} →
       (ExprRelation ∘ { expr: _, aliasName})
       <$> f expr
-    TableRelation t → pure $ TableRelation t
     VariRelation v → pure $ VariRelation v
-    IdentRelation i → pure $ IdentRelation i
+    TableRelation i → pure $ TableRelation i
   sequence = T.sequenceDefault
 
 printRelation ∷ Algebra Relation String
@@ -100,13 +93,11 @@ printRelation = case _ of
     "(" <> expr <> ") AS " <> aliasName
   VariRelation { vari, alias} →
     vari <> F.foldMap (" AS " <> _) alias
-  TableRelation { tablePath, alias } →
+  TableRelation { path, alias } →
     "`"
-    <> either unsafePrintPath unsafePrintPath tablePath
+    <> either Pt.printPath Pt.printPath path
     <> "`"
-    <> F.foldMap (" AS " <> _) alias
-  IdentRelation { ident, alias } →
-    ident <> F.foldMap (\x → " AS `" <> x <> "`") alias
+    <> F.foldMap (\x → " AS `" <> x <> "`") alias
   JoinRelation { left, right, joinType, clause } →
     printRelation left
     <> " "
@@ -128,14 +119,9 @@ encodeJsonRelation = case _ of
     J.~> "vari" J.:= vari
     J.~> "alias" J.:= alias
     J.~> J.jsonEmptyObject
-  TableRelation { tablePath, alias } →
+  TableRelation { path, alias } →
     "tag" J.:= "table relation"
-    J.~> "tablePath" J.:= either unsafePrintPath unsafePrintPath tablePath
-    J.~> "alias" J.:= alias
-    J.~> J.jsonEmptyObject
-  IdentRelation { ident, alias } →
-    "tag" J.:= "ident relation"
-    J.~> "ident" J.:= ident
+    J.~> "path" J.:= either Pt.printPath Pt.printPath path
     J.~> "alias" J.:= alias
     J.~> J.jsonEmptyObject
   JoinRelation { left, right, joinType, clause } →
@@ -153,7 +139,6 @@ decodeJsonRelation = J.decodeJson >=> \obj → do
     "expr relation" → decodeExprRelation obj
     "vari relation" → decodeVariRelation obj
     "table relation" → decodeTableRelation obj
-    "ident relation" → decodeIdentRelation obj
     "join relation" → decodeJoinRelation obj
     _ → Left "This is not join relation"
   where
@@ -167,24 +152,22 @@ decodeJsonRelation = J.decodeJson >=> \obj → do
     alias ← obj J..? "alias"
     pure $ VariRelation { vari, alias }
 
-
   decodeTableRelation obj = do
-    tableString ← obj J..? "tablePath"
-    alias ← obj J..? "alias"
-    tablePath ←
-      parsePath
-        (const $ Left "Incorrect table path in table relation")
-        (const $ Left "Incorrect table path in table relation")
-        (Right ∘ Left)
-        (Right ∘ Right)
-        tableString
-    pure $ TableRelation { tablePath, alias }
+    pathStr ← obj J..? "path"
+    path ←
+      Pt.parsePath
+        (const $ Left "incorrect path")
+        (const $ Left "incorrect path")
 
-  decodeIdentRelation obj = do
-    ident ← obj J..? "ident"
+        (maybe (Left "incorrect path")
+           (Right ∘ Right)
+         ∘ Pt.sandbox Pt.currentDir)
+        (maybe (Left "incorrect path")
+           (Right ∘ Left ∘ (Pt.rootDir Pt.</> _))
+         ∘ Pt.sandbox Pt.rootDir)
+        pathStr
     alias ← obj J..? "alias"
-    pure $ IdentRelation { ident, alias }
-
+    pure $ TableRelation { path, alias }
 
   decodeJoinRelation obj = do
     left ← decodeJsonRelation =<< obj J..? "left"
@@ -193,29 +176,16 @@ decodeJsonRelation = J.decodeJson >=> \obj → do
     joinType ← obj J..? "joinType"
     pure $ JoinRelation { left, right, clause, joinType }
 
-genPath ∷ Int → Gen.Gen FUPath
-genPath n = do
-  d ← A.foldM foldFn Pt.rootDir $ A.replicate n unit
-  name ← map (Int.toStringAs Int.hexadecimal) SC.arbitrary
-  pure $ Right $ d </> Pt.file name
-  where
-  foldFn pt _ = do
-    name ← map (Int.toStringAs Int.hexadecimal) SC.arbitrary
-    pure $ pt </> Pt.dir name
-
-
 arbitraryRelation ∷ CoalgebraM Gen.Gen Relation Int
 arbitraryRelation n =
   if n < 1
   then
     Gen.oneOf genTable
       [ genVari
-      , genIdent
       ]
   else
     Gen.oneOf genTable
       [ genVari
-      , genIdent
       , genJoin
       , genExpr
       ]
@@ -224,14 +194,16 @@ arbitraryRelation n =
     vari ← SC.arbitrary
     alias ← SC.arbitrary
     pure $ VariRelation { vari, alias }
-  genIdent = do
-    ident ← SC.arbitrary
-    alias ← SC.arbitrary
-    pure $ IdentRelation { ident, alias }
   genTable = do
-    tablePath ← genPath $ n + 2
+    let
+      pathPart =
+        map (Int.toStringAs Int.hexadecimal) SC.arbitrary
+    dirs ← map Pt.dir <$> Gen.vectorOf n pathPart
+    fileName ← map Pt.file pathPart
+    let
+      path = Left $ Pt.rootDir Pt.</> F.foldl (\a b → b Pt.</> a) fileName dirs
     alias ← SC.arbitrary
-    pure $ TableRelation { tablePath, alias }
+    pure $ TableRelation { path, alias }
   genExpr = do
     aliasName ← SC.arbitrary
     pure $ ExprRelation { aliasName, expr: n - 1 }
