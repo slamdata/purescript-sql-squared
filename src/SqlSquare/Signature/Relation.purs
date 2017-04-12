@@ -14,6 +14,7 @@ import Data.Path.Pathy as Pt
 import Matryoshka (Algebra, CoalgebraM)
 
 import SqlSquare.Signature.JoinType as JT
+import SqlSquare.Signature.Ident as ID
 
 import SqlSquare.Utils ((∘))
 
@@ -92,12 +93,12 @@ printRelation = case _ of
   ExprRelation {expr, aliasName} →
     "(" <> expr <> ") AS " <> aliasName
   VariRelation { vari, alias} →
-    vari <> F.foldMap (" AS " <> _) alias
+    ":" <> ID.printIdent vari <> F.foldMap (" AS " <> _) alias
   TableRelation { path, alias } →
     "`"
     <> either Pt.printPath Pt.printPath path
     <> "`"
-    <> F.foldMap (\x → " AS `" <> x <> "`") alias
+    <> F.foldMap (\x → " AS " <> ID.printIdent x) alias
   JoinRelation { left, right, joinType, clause } →
     printRelation left
     <> " "

@@ -30,6 +30,9 @@ int i = embed $ Sig.Literal $ Integer i
 num ∷ ∀ t. Corecursive t (Sig.SqlF EJsonF) ⇒ Number → t
 num i = embed $ Sig.Literal $ Decimal $ HN.fromNumber i
 
+hugeNum ∷ ∀ t. Corecursive t (Sig.SqlF EJsonF) ⇒ HN.HugeNum → t
+hugeNum hn = embed $ Sig.Literal $ Decimal hn
+
 string ∷ ∀ t. Corecursive t (Sig.SqlF EJsonF) ⇒ String → t
 string s = embed $ Sig.Literal $ String s
 
@@ -70,8 +73,8 @@ invokeFunction name args = embed $ Sig.InvokeFunction {name, args}
 when ∷ ∀ t. t → (t → Sig.Case t)
 when cond = Sig.Case ∘ { cond, expr: _ }
 
-then_ ∷ ∀ t. (t → Sig.Case t) → t → Sig.Case t
-then_ f t = f t
+then_ ∷ ∀ t. t → (t → Sig.Case t) → Sig.Case t
+then_ t f = f t
 
 select
   ∷ ∀ t f

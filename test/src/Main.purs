@@ -13,7 +13,6 @@ import Test.Unit.Console (TESTOUTPUT)
 
 import Test.Constructors as Constructors
 import Test.Argonaut as Argonaut
-import Test.Search as Search
 import Test.Gen as Gen
 import Test.Parse as Parse
 
@@ -30,7 +29,6 @@ main = do
   runTest do
     Constructors.testSuite
     Argonaut.testSuite
-    Search.testSuite
   Parse.testSuite
 
   Gen.test

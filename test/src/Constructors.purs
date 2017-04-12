@@ -65,7 +65,7 @@ buildSelectQuery =
 
 expectedSqlString ∷ String
 expectedSqlString =
-  "SELECT DISTINCT `foo` AS field, `bar`.`baz`.* FROM `/mongo/testDb/patients` WHERE `quux` = 12.0 GROUP BY `zzz` HAVING `ooo` > 2 ORDER BY `zzz` ASC"
+  "SELECT DISTINCT foo AS field, bar.baz.* FROM `/mongo/testDb/patients` WHERE quux = 12.0 GROUP BY zzz HAVING ooo > 2 ORDER BY zzz ASC"
 
 testSuite ∷ ∀ e. TestSuite e
 testSuite = do

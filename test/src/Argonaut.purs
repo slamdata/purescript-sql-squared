@@ -74,8 +74,8 @@ testSuite =
     test "interpretation works"
       let
         expected =
-          "*.`foo`[1][2][0]"
-          : "*.`foo`.`bar`.`baz`"
+          "*.foo[1][2][0]"
+          : "*.foo.bar.baz"
           : L.Nil
         js =
           (JField "foo" $ JIndex 1 $ JIndex 2 $ JIndex 0 $ JCursorTop)
@@ -92,10 +92,10 @@ testSuite =
           Set.fromFoldable
           $ "*[0]"
           : "*[1]"
-          : "*.`foo`"
-          : "*.`foo`[1]"
-          : "*.`foo`[0].`bar`"
-          : "*.`bar`.`baz`"
+          : "*.foo"
+          : "*.foo[1]"
+          : "*.foo[0].bar"
+          : "*.bar.baz"
           : L.Nil
       in
         Assert.equal expectedFields actualFields
@@ -111,11 +111,11 @@ testSuite =
           $ JCursorTop
         expected =
           Set.fromFoldable
-          $ "*.`foo`"
-          : "*.`foo`.`bar`"
-          : "*.`foo`.`bar`[0]"
-          : "*.`foo`.`bar`[0].`baz`"
-          : "*.`foo`.`bar`[0].`baz`[1]"
+          $ "*.foo"
+          : "*.foo.bar"
+          : "*.foo.bar[0]"
+          : "*.foo.bar[0].baz"
+          : "*.foo.bar[0].baz[1]"
           : L.Nil
       in
         Assert.equal expected $ Set.fromFoldable $ map S.print $ allParents field
@@ -126,12 +126,12 @@ testSuite =
           Set.fromFoldable
           $ "*[0]"
           : "*[1]"
-          : "*.`foo`"
-          : "*.`foo`[1]"
-          : "*.`foo`[0]"
-          : "*.`foo`[0].`bar`"
-          : "*.`bar`.`baz`"
-          : "*.`bar`"
+          : "*.foo"
+          : "*.foo[1]"
+          : "*.foo[0]"
+          : "*.foo[0].bar"
+          : "*.bar.baz"
+          : "*.bar"
           : L.Nil
       in
         Assert.equal expectedFields actualFields

@@ -14,7 +14,7 @@ import Test.StrongCheck as SC
 import Test.StrongCheck.Arbitrary as A
 import Test.Unit.Console as Console
 
-import SqlSquare (Sql, arbitrarySqlOfSize, decodeJson, encodeJson, print, tokenize, parse)
+import SqlSquare (Sql, arbitrarySqlOfSize, decodeJson, encodeJson, print, tokenize)
 
 newtype ArbSql = ArbSql Sql
 
@@ -22,9 +22,6 @@ instance arbitraryArbSql ∷ A.Arbitrary ArbSql where
   arbitrary = map ArbSql $ arbitrarySqlOfSize 3
 
 newtype ParseableSql = ParseableSql Sql
-
---instance arbitraryParseableSql ∷ A.Arbitrary ParseableSql where
---  arbitrary = map ParseableSql $ arbitraryParseableSql 3
 
 testJsonSerialization ∷ ∀ r. Eff (TestEffects r) Unit
 testJsonSerialization =
@@ -41,15 +38,6 @@ testTokenizer =
       SC.Failed $ "Tokenizer  error: " <> show err <> " \n" <> print sql
     E.Right _ →
       SC.Success
-
---testParser ∷ ∀ r. Eff (TestEffects r) Unit
---testParser =
---  SC.quickCheck' 50 \(ParseableSql sql) → case parse $ print sql of
---    E.Left err →
---      SC.Failed $ "Parser error: " <> show err <> " \n" <> print sql
---    E.Right res →
---      res == sql <?> "Mismatch:\n" <> print sql <> "\n" <> print res
-
 
 type TestEffects r =
   ( err ∷ EXCEPTION

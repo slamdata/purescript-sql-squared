@@ -157,8 +157,11 @@ quotedIdent =
   PC.try
   $ PC.between (PS.string "`") (PS.string "`")
   $ map S.fromCharArray
-  $ A.some
-  $ PS.noneOf [ '`' ]
+  $ A.some identChar
+  where
+  identChar = PC.try identEscape <|> identLetter
+  identLetter = PS.satisfy (not ∘ eq '`')
+  identEscape = PS.string "\\`" $> '`'
 
 notQuotedIdent ∷ ∀ m. Monad m ⇒ P.ParserT String m String
 notQuotedIdent = PC.try do

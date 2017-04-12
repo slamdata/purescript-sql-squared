@@ -29,21 +29,11 @@ import Text.Parsing.Parser as P
 import Text.Parsing.Parser.Combinators as PC
 import Text.Parsing.Parser.Pos (initialPos)
 
-import Debug.Trace as DT
-
-traceP ∷ ∀ a b m. Monad m ⇒ P.ParserT a m b → P.ParserT a m b
-traceP p = do
-  r ← p
-  DT.traceAnyA r
-  pure r
-
 parse ∷ ∀ t. Corecursive t (Sig.SqlF EJ.EJsonF) ⇒ String → E.Either P.ParseError t
 parse =
   tokenize
-  >=> DT.traceAnyM
   >=> flip P.runParser do
     res ← expr
-    gets DT.spy
     eof
     pure res
 
@@ -211,7 +201,7 @@ powExpr = PC.try do
 derefExpr ∷ ∀ t m. (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m) ⇒ P.ParserT (Array Token) m t
 derefExpr = PC.try do
   e ← primaryExpression
-  modifiers ← A.many $ operator "." *> modifier
+  modifiers ← A.many modifier
   (mbWildcard ∷ Maybe t) ← PC.optionMaybe do
     operator "."
     wildcard
@@ -222,9 +212,9 @@ derefExpr = PC.try do
     Just _ → embed $ Sig.Splice $ Just modified
   where
   modifier =
-    (ident
-     <#> (embed ∘ Sig.Literal ∘ EJ.String)
-     <#> (\e → embed ∘ Sig.Binop ∘ { op: Sig.FieldDeref, lhs: e, rhs: _}))
+    (do operator "."
+        k ← ident
+        pure \e → embed $ Sig.Binop { op: Sig.FieldDeref, lhs: e, rhs: embed $ Sig.Ident k })
     <|> (operator "{*:}"
          $> (\e → embed $ Sig.Unop { op: Sig.FlattenMapKeys, expr: e}))
     <|> ((operator "{*}" <|> operator "{:*}")
@@ -459,11 +449,12 @@ selectExpr = PC.try do
   rels ← PC.optionMaybe relations
   fil ← PC.optionMaybe filter
   gb ← PC.optionMaybe groupBy
-  ob ← PC.optionMaybe orderBy
+  ob ← PC.optionMaybe $ orderBy prs
+
   pure
     $ embed
     $ Sig.Select
-    { isDistinct: false
+    { isDistinct
     , projections: prs
     , relations: rels
     , filter: fil
@@ -626,18 +617,26 @@ groupBy = PC.try do
 orderBy
   ∷ ∀ t m
   . (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m)
-  ⇒ P.ParserT (Array Token) m (Sig.OrderBy t)
-orderBy = PC.try do
+  ⇒ L.List (Sig.Projection t)
+  → P.ParserT (Array Token) m (Sig.OrderBy t)
+orderBy prs = PC.try do
   keyword "order"
   keyword "by"
   lst ← flip PC.sepBy1 (operator ",") do
-    v ← definedExpr
-    sortStr ← map (fromMaybe "asc") $ PC.optionMaybe (keyword "asc" <|> keyword "desc")
+    mbV ←
+      PC.optionMaybe definedExpr
+    sortStr ←
+      map (fromMaybe "asc") $ PC.optionMaybe (keyword "asc" <|> keyword "desc")
     sort ←
       case sortStr of
         "asc" → pure Sig.ASC
         "desc" → pure Sig.DESC
         _ → P.fail "incorrect sort"
+    v ← case mbV of
+      Just v' → pure v'
+      Nothing → case prs of
+        (Sig.Projection { expr: e }) : L.Nil → pure e
+        _ → P.fail "order by can omit projection if select projections have only one element"
     pure $ sort × v
   case lst of
     L.Nil → P.fail "incorrect order by"

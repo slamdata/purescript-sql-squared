@@ -22,6 +22,7 @@ module SqlSquare.Signature
   , module OB
   , module PR
   , module RL
+  , module ID
   ) where
 
 import Prelude
@@ -55,6 +56,7 @@ import SqlSquare.Signature.OrderType as OT
 import SqlSquare.Signature.Projection as PR
 import SqlSquare.Signature.Relation as RL
 import SqlSquare.Signature.UnaryOperator as UO
+import SqlSquare.Signature.Ident as ID
 
 import Test.StrongCheck.Arbitrary as SC
 import Test.StrongCheck.Gen as Gen
@@ -353,7 +355,7 @@ printSqlF printLiteralF = case _ of
   Unop {expr, op} →
     UO.printUnaryOperator expr op
   Ident s →
-    "`" <> s <> "`"
+    ID.printIdent s
   InvokeFunction {name, args} →
     name <> "(" <> F.intercalate ", " args <> ")"
   Match { expr, cases, else_ } →
@@ -361,12 +363,14 @@ printSqlF printLiteralF = case _ of
     <> expr
     <> F.intercalate " " (map CS.printCase cases)
     <> F.foldMap (" ELSE " <> _) else_
+    <> "END"
   Switch { cases, else_ } →
     "CASE "
     <> F.intercalate " " (map CS.printCase cases)
     <> F.foldMap (" ELSE " <> _) else_
+    <> "END"
   Let { ident, bindTo, in_ } →
-    "`" <> ident <> "` := " <> bindTo <> "; " <> in_
+    ID.printIdent ident <> " := " <> bindTo <> "; " <> in_
   Vari s →
     ":" <> s
   Select { isDistinct, projections, relations, filter, groupBy, orderBy } →

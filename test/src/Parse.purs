@@ -6,15 +6,13 @@ import Control.Monad.Eff (Eff)
 
 import Data.Either as E
 import Data.Foldable as F
-import SqlSquare (Sql, print, parse, tokenize)
+import SqlSquare (Sql, print, parse)
 
-import Test.Unit.Main (runTest)
-import Test.Unit (suite, test, TestSuite)
 import Test.Unit.Console as Console
 
 import Debug.Trace as DT
 
-testPrintParse ∷ String → Eff _ Unit
+testPrintParse ∷ ∀ e. String → Eff (testOutput ∷ Console.TESTOUTPUT|e) Unit
 testPrintParse s = do
   Console.printLabel $ "Testing: \n" <> s <> "\n"
   let parsed = parse s
@@ -35,18 +33,18 @@ inputs =
   , """select ("12" || "12" || "12")"""
   , """select date("12-12-12") from `/fo` cross join `/bar`"""
   , """Select foo as bar from `/test/db/collection`"""
-  , """Select `foo`, `bar`.[*] from `/test` join `/test2` on baz where doo = (12 + 23)"""
+  , """Select `foo`, `bar`[*] from `/test` join `/test2` on baz where doo = (12 + 23)"""
   , """:foo := 12; select * from `/test` group by baz"""
   , """select 1"""
   , """select (1, 2)"""
   , """:foo := [1, 2]; select 1"""
   , """:foo := 1; :bar := 2; select [] """
   , """select foo from `/bar` order by zoo desc"""
-
+  , """select distinct a from `/f`"""
   ]
 
 
-testSuite ∷ ∀ e. Eff _ Unit
+testSuite ∷ ∀ e. Eff (testOutput ∷ Console.TESTOUTPUT|e) Unit
 testSuite = do
   Console.printLabel "\n\n:::::::::: TESTING PARSER ::::::::::\n\n"
   F.for_ inputs testPrintParse
