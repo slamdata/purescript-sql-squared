@@ -17,6 +17,7 @@ import Data.List as L
 import Data.Foldable as F
 import Data.Maybe (Maybe(..), isNothing, fromMaybe, isJust, maybe)
 import Data.Json.Extended as EJ
+import Data.Tuple (Tuple(..))
 import Data.Path.Pathy as Pt
 import Data.String as S
 
@@ -32,10 +33,7 @@ import Text.Parsing.Parser.Pos (initialPos)
 parse ∷ ∀ t. Corecursive t (Sig.SqlF EJ.EJsonF) ⇒ String → E.Either P.ParseError t
 parse =
   tokenize
-  >=> flip P.runParser do
-    res ← expr
-    eof
-    pure res
+  >=> flip P.runParser (expr <* eof)
 
 token ∷ ∀ m. Monad m ⇒ P.ParserT (Array Token) m Token
 token = do
@@ -50,7 +48,6 @@ eof ∷ ∀ m. Monad m ⇒ P.ParserT (Array Token) m Unit
 eof = do
   input ← gets \(P.ParseState input _ _) → input
   unless (A.null input) $ P.fail "Expected EOF"
-  pure unit
 
 whenTok ∷ ∀ m. Monad m ⇒ (Token → Boolean) → P.ParserT (Array Token) m Token
 whenTok f = PC.try do
@@ -67,32 +64,23 @@ prod
   → P.ParserT i m a
 prod pa pb f = do
   l ← pa
-  p ← A.many do
-    o ← pb
-    r ← pa
-    pure $ o × r
+  p ← A.many $ Tuple <$> pb <*> pa
   pure $ F.foldl (\acc (o × r) → f acc r o) l p
 
 ident ∷ ∀ m. Monad m ⇒ P.ParserT (Array Token) m String
-ident = PC.try do
-  a ← token
-  case a of
-    Identifier s → pure s
-    _ → P.fail "Token is not an identifier"
+ident = PC.try $ token >>= case _ of
+  Identifier s → pure s
+  _ → P.fail "Token is not an identifier"
 
 operator ∷ ∀ m. Monad m ⇒ String →  P.ParserT (Array Token) m Unit
-operator s = PC.try do
-  a ← token
-  case a of
-    Op ss | s == ss → pure unit
-    _ → P.fail $  "Token is not an operator " <> s
+operator s = PC.try $ token >>= case _ of
+  Op ss | s == ss → pure unit
+  _ → P.fail $  "Token is not an operator " <> s
 
 keyword ∷ ∀ m. Monad m ⇒ String →  P.ParserT (Array Token) m String
-keyword s = PC.try do
-  a ← token
-  case a of
-    Kw ss | S.toLower s == S.toLower ss → pure s
-    _ → P.fail $ "Token is not a keyword " <> s
+keyword s = PC.try $ token >>= case _ of
+  Kw ss | S.toLower s == S.toLower ss → pure s
+  _ → P.fail $ "Token is not a keyword " <> s
 
 match ∷ ∀ m. Monad m ⇒ Token → P.ParserT (Array Token) m Token
 match = whenTok ∘ eq
@@ -202,11 +190,11 @@ derefExpr ∷ ∀ t m. (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m) ⇒ P.Parse
 derefExpr = PC.try do
   e ← primaryExpression
   modifiers ← A.many modifier
-  (mbWildcard ∷ Maybe t) ← PC.optionMaybe do
+  mbWildcard ∷ Maybe t ← PC.optionMaybe do
     operator "."
     wildcard
   let
-    modified = F.foldl (\a f → f a) e modifiers
+    modified = F.foldl (#) e modifiers
   pure case mbWildcard of
     Nothing → modified
     Just _ → embed $ Sig.Splice $ Just modified
@@ -241,7 +229,7 @@ derefExpr = PC.try do
             pure \e → embed $ Sig.Binop { op: Sig.IndexDeref, lhs: e, rhs })
 
 wildcard ∷ ∀ m t. (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m) ⇒ P.ParserT (Array Token) m t
-wildcard = operator "*" $> (embed $ Sig.Splice Nothing)
+wildcard = operator "*" $> embed (Sig.Splice Nothing)
 
 primaryExpression
   ∷ ∀ t m
@@ -385,7 +373,7 @@ negatableSuffix = PC.try do
     pure $ isNothing  n
   let inv = fromMaybe true mbInv
   suffix ← betweenSuffix <|> inSuffix <|> likeSuffix
-  pure $ \e → (if inv then _NOT else id) $ suffix e
+  pure \e → (if inv then _NOT else id) $ suffix e
 
 betweenSuffix
   ∷ ∀ t m
@@ -626,7 +614,7 @@ orderBy prs = PC.try do
     mbV ←
       PC.optionMaybe definedExpr
     sortStr ←
-      map (fromMaybe "asc") $ PC.optionMaybe (keyword "asc" <|> keyword "desc")
+      fromMaybe "asc" <$> PC.optionMaybe (keyword "asc" <|> keyword "desc")
     sort ←
       case sortStr of
         "asc" → pure Sig.ASC

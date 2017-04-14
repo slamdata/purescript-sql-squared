@@ -2,11 +2,12 @@ module Test.Gen where
 
 import Prelude
 
-import Control.Monad.Eff (Eff)
+import Control.Monad.Eff (Eff, foreachE)
 import Control.Monad.Eff.Exception (EXCEPTION)
 import Control.Monad.Eff.Random (RANDOM)
 import Control.Monad.Eff.Console (CONSOLE)
 
+import Data.Array ((..))
 import Data.Either as E
 
 import Test.StrongCheck ((<?>))
@@ -49,60 +50,6 @@ type TestEffects r =
 test ∷ ∀ r. Eff (TestEffects r) Unit
 test = do
   Console.printLabel "\n\n:::::::::: TESTING Argonaut codecs ::::::::::\n\n"
-  testJsonSerialization
-  testJsonSerialization
-  testJsonSerialization
-  testJsonSerialization
-  testJsonSerialization
-  testJsonSerialization
-  testJsonSerialization
-  testJsonSerialization
-  testJsonSerialization
-  testJsonSerialization
-  testJsonSerialization
-  testJsonSerialization
-  testJsonSerialization
-  testJsonSerialization
-  testJsonSerialization
-  testJsonSerialization
-  testJsonSerialization
-  testJsonSerialization
-  testJsonSerialization
-  testJsonSerialization
-  testJsonSerialization
-  testJsonSerialization
-  testJsonSerialization
-  testJsonSerialization
+  foreachE (1 .. 20) $ const $ testJsonSerialization
   Console.printLabel "\n\n:::::::::: TESTING TOKENIZER ::::::::::\n\n"
-  testTokenizer
-  testTokenizer
-  testTokenizer
-  testTokenizer
-  testTokenizer
-  testTokenizer
-  testTokenizer
-  testTokenizer
-  testTokenizer
-  testTokenizer
-  testTokenizer
-  testTokenizer
-  testTokenizer
-  testTokenizer
-  testTokenizer
-  testTokenizer
-  testTokenizer
-  testTokenizer
-  testTokenizer
-  testTokenizer
-  testTokenizer
-  testTokenizer
-  testTokenizer
-  testTokenizer
-  testTokenizer
-  testTokenizer
-  testTokenizer
-  testTokenizer
-  testTokenizer
-  testTokenizer
-  testTokenizer
-  testTokenizer
+  foreachE (1 .. 20) $ const $ testTokenizer

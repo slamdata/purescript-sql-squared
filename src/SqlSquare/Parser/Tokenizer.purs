@@ -7,7 +7,6 @@ module SqlSquare.Parser.Tokenizer
 import Prelude
 
 import Control.Alt ((<|>))
-import Control.Monad.State (get)
 
 import Data.Array as A
 import Data.Int as Int
@@ -37,10 +36,16 @@ data Token
   | Op String
   | Identifier String
   | Lit Literal
+  | Comment String
 
 isKeyword ∷ Token → Boolean
 isKeyword = case _ of
   Kw _ → true
+  _ → false
+
+isComment ∷ Token → Boolean
+isComment = case _ of
+  Comment _ → true
   _ → false
 
 derive instance eqToken ∷ Eq Token
@@ -150,12 +155,34 @@ digits ∷ Array Char
 digits = ['0','1','2','3','4','5','6','7','8','9' ]
 
 ident ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
-ident = map Identifier $ quotedIdent <|> notQuotedIdent
+ident = map Identifier $ PC.try quotedIdent <|> PC.try notQuotedIdent
+
+oneLineComment ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
+oneLineComment =
+  PC.between (PC.try $ PS.string "--") (PS.string "\n")
+    $ map (Comment ∘ S.fromCharArray)
+    $ A.many $ PS.satisfy
+    $ not ∘ eq '\n'
+
+multiLineComment ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
+multiLineComment = do
+  PS.string "/*"
+  m ← collectBeforeComment ""
+  pure $ Comment m
+  where
+  collectBeforeComment acc =
+    let l = S.length acc
+    in do
+      c ← PS.anyChar
+      case S.drop (l - 1) acc of
+        "*" | c == '/' →
+          pure acc
+        _ →
+          collectBeforeComment $ acc <> S.fromCharArray [ c ]
 
 quotedIdent ∷ ∀ m. Monad m ⇒ P.ParserT String m String
 quotedIdent =
-  PC.try
-  $ PC.between (PS.string "`") (PS.string "`")
+  PC.between (PS.string "`") (PS.string "`")
   $ map S.fromCharArray
   $ A.some identChar
   where
@@ -164,7 +191,7 @@ quotedIdent =
   identEscape = PS.string "\\`" $> '`'
 
 notQuotedIdent ∷ ∀ m. Monad m ⇒ P.ParserT String m String
-notQuotedIdent = PC.try do
+notQuotedIdent = do
   first ← PT.letter <|> PS.char '_'
   other ← A.many (PT.alphaNum <|> PS.char '_')
   let
@@ -172,8 +199,6 @@ notQuotedIdent = PC.try do
   if isJust $ A.elemIndex (S.toLower str) keywords
     then P.fail "unexpected keyword"
     else pure str
-
-
 
 stringLit ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
 stringLit =
@@ -302,7 +327,9 @@ tokens ∷ ∀ m. Monad m ⇒ P.ParserT String m (Array Token)
 tokens = do
   PS.skipSpaces
   A.some $ PC.choice
-    [ skipped op
+    [ skipped oneLineComment
+    , skipped multiLineComment
+    , skipped op
     , skipped keyword
     , skipped ident
     , skipped numLit
@@ -310,10 +337,8 @@ tokens = do
     , skipped stringLit
     ]
   where
-  skipped r = PC.try do
-    res ← r
-    PS.skipSpaces
-    pure res
+  skipped r = PC.try (r <* PS.skipSpaces)
 
 tokenize ∷ String → Either P.ParseError (Array Token)
-tokenize input = P.runParser input tokens
+tokenize input =
+  A.filter (not ∘ isComment) <$>  P.runParser input tokens

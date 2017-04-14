@@ -41,6 +41,10 @@ inputs =
   , """:foo := 1; :bar := 2; select [] """
   , """select foo from `/bar` order by zoo desc"""
   , """select distinct a from `/f`"""
+  , """select a from /* trololo */ `/db`"""
+  , """-- comment
+select 12
+"""
   ]
 
 
