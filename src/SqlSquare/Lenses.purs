@@ -2,7 +2,6 @@ module SqlSquare.Lenses where
 
 import Prelude
 
-import Data.DateTime as DT
 import Data.HugeNum as HN
 import Data.Json.Extended as EJ
 import Data.Lens (Prism', prism', Lens', lens, Iso')
@@ -13,7 +12,7 @@ import Data.NonEmpty as NE
 
 import Matryoshka (class Recursive, class Corecursive, embed, project)
 
-import SqlSquare.AST as S
+import SqlSquare.Signature as S
 import SqlSquare.Utils (type (×), (∘), (⋙))
 
 _GroupBy ∷ ∀ a. Iso' (S.GroupBy a) {keys ∷ L.List a, having ∷ M.Maybe a}
@@ -38,21 +37,15 @@ _ExprRelation = prism' S.ExprRelation case _ of
   S.ExprRelation r → M.Just r
   _ → M.Nothing
 
-_TableRelation ∷ ∀ a. Prism' (S.Relation a) (S.TableRelR a)
-_TableRelation = prism' S.TableRelation case _ of
-  S.TableRelation r → M.Just r
-  _ → M.Nothing
-
-_VariRelation ∷ ∀ a. Prism' (S.Relation a) (S.VariRelR a)
+_VariRelation ∷ ∀ a. Prism' (S.Relation a) S.VariRelR
 _VariRelation = prism' S.VariRelation case _ of
   S.VariRelation r → M.Just r
   _ → M.Nothing
 
-_IdentRelation ∷ ∀ a. Prism' (S.Relation a) S.IdentRelR
-_IdentRelation = prism' S.IdentRelation case _ of
-  S.IdentRelation r → M.Just r
+_TableRelation ∷ ∀ a. Prism' (S.Relation a) S.TableRelR
+_TableRelation = prism' S.TableRelation case _ of
+  S.TableRelation r → M.Just r
   _ → M.Nothing
-
 
 _lhs ∷ ∀ a r. Lens' { lhs ∷ a |r } a
 _lhs = lens _.lhs _{ lhs = _ }
@@ -294,28 +287,4 @@ _Parens
   ⇒ Prism' t t
 _Parens = prism' (embed ∘ S.Parens) $ project ⋙ case _ of
   S.Parens t → M.Just t
-  _ → M.Nothing
-
-_TimeLiteral
-  ∷ ∀ t
-  . (Recursive t (S.SqlF EJ.EJsonF), Corecursive t (S.SqlF EJ.EJsonF))
-  ⇒ Prism' t DT.Time
-_TimeLiteral = prism' (embed ∘ S.Literal ∘ EJ.Time) $ project ⋙ case _ of
-  S.Literal (EJ.Time t) → M.Just t
-  _ → M.Nothing
-
-_DateLiteral
-  ∷ ∀ t
-  . (Recursive t (S.SqlF EJ.EJsonF), Corecursive t (S.SqlF EJ.EJsonF))
-  ⇒ Prism' t DT.Date
-_DateLiteral = prism' (embed ∘ S.Literal ∘ EJ.Date) $ project ⋙ case _ of
-  S.Literal (EJ.Date d) → M.Just d
-  _ → M.Nothing
-
-_TimestampLiteral
-  ∷ ∀ t
-  . (Recursive t (S.SqlF EJ.EJsonF), Corecursive t (S.SqlF EJ.EJsonF))
-  ⇒ Prism' t DT.DateTime
-_TimestampLiteral = prism' (embed ∘ S.Literal ∘ EJ.Timestamp) $ project ⋙ case _ of
-  S.Literal (EJ.Timestamp dt) → M.Just dt
   _ → M.Nothing

@@ -1,12 +1,16 @@
-module SqlSquare.Case where
+module SqlSquare.Signature.Case where
 
 import Prelude
 
+import Data.Argonaut as J
+import Data.Either as E
 import Data.Newtype (class Newtype)
 import Data.Foldable as F
 import Data.Traversable as T
 
-import Matryoshka (Algebra)
+import Matryoshka (Algebra, CoalgebraM)
+
+import Test.StrongCheck.Gen as Gen
 
 newtype Case a = Case { cond ∷ a, expr ∷ a }
 
@@ -25,3 +29,24 @@ instance traversableCase ∷ T.Traversable Case where
 
 printCase ∷ Algebra Case String
 printCase (Case { cond, expr }) = " WHEN " <> cond <> " THEN " <> expr
+
+encodeJsonCase ∷ Algebra Case J.Json
+encodeJsonCase (Case { cond, expr }) =
+  "tag" J.:= "case"
+  J.~> "cond" J.:= cond
+  J.~> "expr" J.:= expr
+  J.~> J.jsonEmptyObject
+
+decodeJsonCase ∷ CoalgebraM (E.Either String) Case J.Json
+decodeJsonCase = J.decodeJson >=> \obj → do
+  tag ← obj J..? "tag"
+  unless (tag == "case") $ E.Left "This is not case expression"
+  cond ← obj J..? "cond"
+  expr ← obj J..? "expr"
+  pure $ Case { cond, expr }
+
+
+arbitraryCase ∷ CoalgebraM Gen.Gen Case Int
+arbitraryCase n
+  | n < 2 = pure $ Case { cond: 0, expr: 0 }
+  | otherwise = pure $ Case { cond: n - 1, expr: n - 1 }
