@@ -20,7 +20,8 @@
     "purescript-pathy": "^4.0.0",
     "purescript-profunctor": "^3.0.0",
     "purescript-profunctor-lenses": "^3.2.0",
-    "purescript-ejson": "^9.0.0"
+    "purescript-ejson": "^9.0.0",
+    "purescript-argonaut-codecs": "^3.0.1"
   },
   "devDependencies": {
     "purescript-argonaut": "^3.0.0",
