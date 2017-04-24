@@ -1,6 +1,6 @@
-module SqlSquare.Parser
+module SqlSquared.Parser
   ( parse
-  , module SqlSquare.Parser.Tokenizer
+  , module SqlSquared.Parser.Tokenizer
   ) where
 
 import Prelude
@@ -21,9 +21,9 @@ import Data.Tuple (Tuple(..))
 import Data.Path.Pathy as Pt
 import Data.String as S
 
-import SqlSquare.Utils ((∘), type (×), (×))
-import SqlSquare.Parser.Tokenizer (Token(..), tokenize, Literal(..))
-import SqlSquare.Signature as Sig
+import SqlSquared.Utils ((∘), type (×), (×))
+import SqlSquared.Parser.Tokenizer (Token(..), tokenize, Literal(..))
+import SqlSquared.Signature as Sig
 import Matryoshka (class Corecursive, embed)
 
 import Text.Parsing.Parser as P
@@ -85,10 +85,16 @@ keyword s = PC.try $ token >>= case _ of
 match ∷ ∀ m. Monad m ⇒ Token → P.ParserT (Array Token) m Token
 match = whenTok ∘ eq
 
-expr ∷ ∀ t m. (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m) ⇒ P.ParserT (Array Token) m t
+expr
+  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
+  ⇒ P.ParserT (Array Token) m t
 expr = letExpr
 
-letExpr ∷ ∀ t m. (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m) ⇒ P.ParserT (Array Token) m t
+letExpr
+  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
+  ⇒ P.ParserT (Array Token) m t
 letExpr =
   (PC.try do
       operator ":"
@@ -100,7 +106,10 @@ letExpr =
       pure $ embed $ Sig.Let { ident: i, bindTo, in_ } )
   <|> queryExpr
 
-queryExpr ∷ ∀ t m. (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m) ⇒ P.ParserT (Array Token) m t
+queryExpr
+  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
+  ⇒ P.ParserT (Array Token) m t
 queryExpr = PC.try do
   prod (query <|> definedExpr) queryBinop \lhs rhs op →
     embed $ Sig.Binop { lhs, rhs, op }
@@ -119,41 +128,62 @@ queryBinop =
 
 
 -- TODO, add update and delete
-query ∷ ∀ t m. (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m) ⇒ P.ParserT (Array Token) m t
+query
+  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
+  ⇒ P.ParserT (Array Token) m t
 query = selectExpr
 
-definedExpr ∷ ∀ t m. (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m) ⇒ P.ParserT (Array Token) m t
+definedExpr ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
+  ⇒ P.ParserT (Array Token) m t
 definedExpr = PC.try do
   prod rangeExpr (operator "??") \lhs rhs _ →
     embed $ Sig.Binop { lhs, rhs, op: Sig.IfUndefined }
 
-rangeExpr ∷ ∀ t m. (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m) ⇒ P.ParserT (Array Token) m t
+rangeExpr
+  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
+  ⇒ P.ParserT (Array Token) m t
 rangeExpr = PC.try do
   prod orExpr (operator "..") \lhs rhs _ →
     embed $ Sig.Binop { lhs, rhs, op: Sig.Range }
 
-orExpr ∷ ∀ t m. (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m) ⇒ P.ParserT (Array Token) m t
+orExpr
+  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
+  ⇒ P.ParserT (Array Token) m t
 orExpr = PC.try do
   prod andExpr (keyword "or") \lhs rhs _ →
     embed $ Sig.Binop { lhs, rhs, op: Sig.Or }
 
-andExpr ∷ ∀ t m. (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m) ⇒ P.ParserT (Array Token) m t
+andExpr
+  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
+  ⇒ P.ParserT (Array Token) m t
 andExpr = PC.try do
   prod cmpExpr (keyword "and") \lhs rhs _ →
     embed $ Sig.Binop { lhs, rhs, op: Sig.And }
 
-cmpExpr ∷ ∀ t m. (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m) ⇒ P.ParserT (Array Token) m t
+cmpExpr
+  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
+  ⇒ P.ParserT (Array Token) m t
 cmpExpr = PC.try do
   e ← defaultExpr
   modifiers ← A.many $ negatableSuffix <|> relationalSuffix
   pure $ F.foldl (\acc fn → fn acc) e modifiers
 
-defaultExpr ∷ ∀ t m. (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m) ⇒ P.ParserT (Array Token) m t
+defaultExpr
+  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
+  ⇒ P.ParserT (Array Token) m t
 defaultExpr = PC.try do
   prod concatExpr searchLikeOp \lhs rhs op → op lhs rhs
 
 searchLikeOp
-  ∷ ∀ t m. (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m)
+  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
   ⇒ P.ParserT (Array Token) m (t → t → t)
 searchLikeOp =
   (operator "~" $> (_SEARCH false))
@@ -163,17 +193,26 @@ searchLikeOp =
   <|> (operator "~~" $> _LIKE Nothing)
   <|> (operator "!~~" $> (\a b → _NOT $ _LIKE Nothing a b))
 
-concatExpr ∷ ∀ t m. (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m) ⇒ P.ParserT (Array Token) m t
+concatExpr
+  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
+  ⇒ P.ParserT (Array Token) m t
 concatExpr = PC.try do
   prod addExpr (operator "||") \lhs rhs _ →
     embed $ Sig.Binop {op: Sig.Concat, lhs, rhs}
 
-addExpr ∷ ∀ t m. (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m) ⇒ P.ParserT (Array Token) m t
+addExpr
+  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
+  ⇒ P.ParserT (Array Token) m t
 addExpr = PC.try do
   prod multExpr ((operator "+" $> Sig.Plus) <|> (operator "-" $> Sig.Minus)) \lhs rhs op →
     embed $ Sig.Binop {op, lhs, rhs}
 
-multExpr ∷ ∀ t m. (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m) ⇒ P.ParserT (Array Token) m t
+multExpr
+  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
+  ⇒ P.ParserT (Array Token) m t
 multExpr = PC.try do
   prod powExpr
     ((operator "*" $> Sig.Mult)
@@ -181,12 +220,18 @@ multExpr = PC.try do
      <|> (operator "%" $> Sig.Mod))
     \lhs rhs op → embed $ Sig.Binop {op, lhs, rhs}
 
-powExpr ∷ ∀ t m. (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m) ⇒ P.ParserT (Array Token) m t
+powExpr
+  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
+  ⇒ P.ParserT (Array Token) m t
 powExpr = PC.try do
   prod derefExpr (operator "^") \lhs rhs _ →
     embed $ Sig.Binop {op: Sig.Pow, lhs, rhs}
 
-derefExpr ∷ ∀ t m. (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m) ⇒ P.ParserT (Array Token) m t
+derefExpr
+  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
+  ⇒ P.ParserT (Array Token) m t
 derefExpr = PC.try do
   e ← primaryExpression
   modifiers ← A.many modifier
@@ -228,12 +273,16 @@ derefExpr = PC.try do
             operator "]"
             pure \e → embed $ Sig.Binop { op: Sig.IndexDeref, lhs: e, rhs })
 
-wildcard ∷ ∀ m t. (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m) ⇒ P.ParserT (Array Token) m t
+wildcard
+  ∷ ∀ m t. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
+  ⇒ P.ParserT (Array Token) m t
 wildcard = operator "*" $> embed (Sig.Splice Nothing)
 
 primaryExpression
   ∷ ∀ t m
-  . (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m)
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
   ⇒ P.ParserT (Array Token) m t
 primaryExpression =
   caseExpr
@@ -250,57 +299,65 @@ primaryExpression =
   <|> mapLiteral
   <|> (ident <#> (embed ∘ Sig.Ident))
 
-caseExpr ∷ ∀ t m. (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m) ⇒ P.ParserT (Array Token) m t
+caseExpr
+  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
+  ⇒ P.ParserT (Array Token) m t
 caseExpr =
   (PC.try do
-      keyword "case"
+      _ ← keyword "case"
       (cs × else_) ← cases
       pure $ embed $ Sig.Switch { cases: cs, else_ })
   <|> (PC.try do
-          keyword "case"
+          _ ← keyword "case"
           e ← expr
           (cs × else_) ← cases
           pure $ embed $ Sig.Match { cases: cs, expr: e, else_ })
 
 cases
   ∷ ∀ t m
-  . (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m)
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
   ⇒ P.ParserT (Array Token) m (L.List (Sig.Case t) × (Maybe t))
 cases = PC.try do
   cs ←
     L.some do
-      keyword "when"
+      _ ← keyword "when"
       cond ← expr
-      keyword "then"
+      _ ← keyword "then"
       e ← expr
       pure $ Sig.Case { cond, expr: e}
   else_ ←
     PC.optionMaybe do
-      keyword "else"
+      _ ← keyword "else"
       expr
-  keyword "end"
+  _ ← keyword "end"
   pure $ cs × else_
 
-unshiftExpr ∷ ∀ t m. (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m) ⇒ P.ParserT (Array Token) m t
+unshiftExpr
+  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
+  ⇒ P.ParserT (Array Token) m t
 unshiftExpr =
   (PC.try do
-      operator "["
+      _ ← operator "["
       e ← expr
-      operator "..."
-      operator "]"
+      _ ← operator "..."
+      _ ← operator "]"
       pure $ embed $ Sig.Unop { op: Sig.UnshiftArray, expr: e })
   <|> (PC.try do
-          operator "{"
+          _ ← operator "{"
           lhs ← expr
-          operator ":"
+          _ ← operator ":"
           rhs ← expr
-          operator "..."
-          operator "}"
+          _ ← operator "..."
+          _ ← operator "}"
           pure $ embed $ Sig.Binop { op: Sig.UnshiftMap, lhs, rhs })
 
 parenList
   ∷ ∀ t m
-  . (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m)
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
   ⇒ P.ParserT (Array Token) m (L.List t)
 parenList = PC.try do
   operator "("
@@ -308,7 +365,10 @@ parenList = PC.try do
   operator ")"
   pure $ L.fromFoldable arr
 
-unaryOperator ∷ ∀ t m. (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m) ⇒ P.ParserT (Array Token) m t
+unaryOperator
+  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
+  ⇒ P.ParserT (Array Token) m t
 unaryOperator = PC.try do
   op ←
     (operator "-" $> Sig.Negative)
@@ -319,19 +379,28 @@ unaryOperator = PC.try do
   e ← primaryExpression
   pure $ embed $ Sig.Unop { op, expr: e}
 
-functionExpr ∷ ∀ t m. (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m) ⇒ P.ParserT (Array Token) m t
+functionExpr
+  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
+  ⇒ P.ParserT (Array Token) m t
 functionExpr = PC.try do
   name ← ident
   args ← parenList
   pure $ embed $ Sig.InvokeFunction {name, args}
 
-variable ∷ ∀ t m. (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m) ⇒ P.ParserT (Array Token) m t
+variable
+  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
+  ⇒ P.ParserT (Array Token) m t
 variable = PC.try do
   operator ":"
   s ← ident
   pure $ embed $ Sig.Vari s
 
-literal ∷ ∀ t m. (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m) ⇒ P.ParserT (Array Token) m t
+literal
+  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
+  ⇒ P.ParserT (Array Token) m t
 literal = PC.try $ token >>= case _ of
   Lit (String s) → pure $ embed $ Sig.Literal $ EJ.String s
   Lit (Integer i) → pure $ embed $ Sig.Literal $ EJ.Integer i
@@ -341,21 +410,30 @@ literal = PC.try $ token >>= case _ of
        | s == "false" → pure $ embed $ Sig.Literal $ EJ.Boolean false
   _ → P.fail "incorrect literal"
 
-arrayLiteral ∷ ∀ t m. (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m) ⇒ P.ParserT (Array Token) m t
+arrayLiteral
+  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
+  ⇒ P.ParserT (Array Token) m t
 arrayLiteral = PC.try do
   operator "["
   els ← PC.sepBy expr $ operator ","
   operator "]"
   pure $ embed $ Sig.Literal $ EJ.Array $ A.fromFoldable els
 
-mapLiteral ∷ ∀ t m. (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m) ⇒ P.ParserT (Array Token) m t
+mapLiteral
+  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
+  ⇒ P.ParserT (Array Token) m t
 mapLiteral = PC.try do
   operator "{"
   els ← PC.sepBy pair $ operator ","
   operator "}"
   pure $ embed $ Sig.Literal $ EJ.Map $ EJ.EJsonMap $ A.fromFoldable els
 
-pair ∷ ∀ t m. (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m) ⇒ P.ParserT (Array Token) m (t × t)
+pair
+  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
+  ⇒ P.ParserT (Array Token) m (t × t)
 pair = PC.try do
   l ← expr
   operator ":"
@@ -364,11 +442,12 @@ pair = PC.try do
 
 negatableSuffix
   ∷ ∀ t m
-  . (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m)
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
   ⇒ P.ParserT (Array Token) m (t → t)
 negatableSuffix = PC.try do
   mbInv ← PC.optionMaybe do
-    keyword "is"
+    _ ← keyword "is"
     n ← PC.optionMaybe $ keyword "not"
     pure $ isNothing  n
   let inv = fromMaybe true mbInv
@@ -377,40 +456,44 @@ negatableSuffix = PC.try do
 
 betweenSuffix
   ∷ ∀ t m
-  . (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m)
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
   ⇒ P.ParserT (Array Token) m (t → t)
 betweenSuffix = PC.try do
-  keyword "between"
+  _ ← keyword "between"
   lhs ← defaultExpr
-  keyword "and"
+  _ ← keyword "and"
   rhs ← defaultExpr
   pure $ \e → embed $ Sig.InvokeFunction {name: "BETWEEN", args: e:lhs:rhs:L.Nil }
 
 inSuffix
   ∷ ∀ t m
-  . (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m)
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
   ⇒ P.ParserT (Array Token) m (t → t)
 inSuffix = PC.try do
-  keyword "in"
+  _ ← keyword "in"
   rhs ← defaultExpr
   pure $ \lhs → embed $ Sig.Binop { op: Sig.In, lhs, rhs }
 
 likeSuffix
   ∷ ∀ t m
-  . (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m)
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
   ⇒ P.ParserT (Array Token) m (t → t)
 likeSuffix = PC.try do
-  keyword "like"
+  _ ← keyword "like"
   rhs ← defaultExpr
   mbEsc ← PC.optionMaybe do
-    keyword "escape"
+    _ ← keyword "escape"
     defaultExpr
   pure $ \lhs → _LIKE mbEsc lhs rhs
 
 
 relationalSuffix
   ∷ ∀ t m
-  . (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m)
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
   ⇒ P.ParserT (Array Token) m (t → t)
 relationalSuffix = PC.try do
   op ← relationalOp
@@ -429,9 +512,13 @@ relationalOp =
   <|> (PC.try (keyword "is" *> keyword "not") $> Sig.Neq)
   <|> (keyword "is" $> Sig.Eq)
 
-selectExpr ∷ ∀ t m. (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m) ⇒ P.ParserT (Array Token) m t
+selectExpr
+  ∷ ∀ t m
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
+  ⇒ P.ParserT (Array Token) m t
 selectExpr = PC.try do
-  keyword "select"
+  _ ← keyword "select"
   isDistinct ← map isJust $ PC.optionMaybe $ keyword "distinct"
   prs ← projections
   rels ← PC.optionMaybe relations
@@ -452,10 +539,11 @@ selectExpr = PC.try do
 
 relations
   ∷ ∀ t m
-  . (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m)
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
   ⇒ P.ParserT (Array Token) m (Sig.Relation t)
 relations = PC.try do
-  keyword "from"
+  _ ← keyword "from"
   rels ← PC.sepBy1 relation $ operator ","
   let
     foldFn Nothing rel = Just rel
@@ -471,7 +559,8 @@ relations = PC.try do
 
 relation
   ∷ ∀ t m
-  . (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m)
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
   ⇒ P.ParserT (Array Token) m (Sig.Relation t)
 relation = PC.try do
   first ← simpleRelation
@@ -480,7 +569,8 @@ relation = PC.try do
 
 simpleRelation
   ∷ ∀ t m
-  . (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m)
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
   ⇒ P.ParserT (Array Token) m (Sig.Relation t)
 simpleRelation =
   tableRelation
@@ -489,7 +579,8 @@ simpleRelation =
 
 tableRelation
   ∷ ∀ t m
-  . (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m)
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
   ⇒ P.ParserT (Array Token) m (Sig.Relation t)
 tableRelation = PC.try do
   i ← ident
@@ -506,32 +597,34 @@ tableRelation = PC.try do
       i
 
   a ← PC.optionMaybe do
-    keyword "as"
+    _ ← keyword "as"
     ident
   pure $ Sig.TableRelation { alias: a, path }
 
 
 variRelation
   ∷ ∀ t m
-  . (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m)
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
   ⇒ P.ParserT (Array Token) m (Sig.Relation t)
 variRelation = PC.try do
   operator ":"
   vari ← ident
   a ← PC.optionMaybe do
-    keyword "as"
+    _ ← keyword "as"
     ident
   pure $ Sig.VariRelation { alias: a, vari }
 
 exprRelation
   ∷ ∀ t m
-  . (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m)
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
   ⇒ P.ParserT (Array Token) m (Sig.Relation t)
 exprRelation = PC.try do
   operator "("
   e ← expr
   operator ")"
-  keyword "as"
+  _ ← keyword "as"
   i ← ident
   pure $ Sig.ExprRelation { aliasName: i, expr: e }
 
@@ -539,7 +632,8 @@ exprRelation = PC.try do
 
 stdJoinRelation
   ∷ ∀ t m
-  . (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m)
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
   ⇒ P.ParserT (Array Token) m (Sig.Relation t → Sig.Relation t)
 stdJoinRelation = PC.try do
   joinType ←
@@ -555,9 +649,9 @@ stdJoinRelation = PC.try do
     <|>
     (Sig.InnerJoin
      <$ keyword "inner")
-  keyword "join"
+  _ ← keyword "join"
   right ← simpleRelation
-  keyword "on"
+  _ ← keyword "on"
   clause ← expr
   pure \left →
     Sig.JoinRelation
@@ -568,11 +662,12 @@ stdJoinRelation = PC.try do
       }
 crossJoinRelation
   ∷ ∀ t m
-  . (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m)
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
   ⇒ P.ParserT (Array Token) m (Sig.Relation t → Sig.Relation t)
 crossJoinRelation = PC.try do
-  keyword "cross"
-  keyword "join"
+  _ ← keyword "cross"
+  _ ← keyword "join"
   right ← simpleRelation
   pure \left →
     Sig.JoinRelation
@@ -583,33 +678,39 @@ crossJoinRelation = PC.try do
       }
 
 
-filter ∷ ∀ t m. (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m) ⇒ P.ParserT (Array Token) m t
+filter
+  ∷ ∀ t m
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
+  ⇒ P.ParserT (Array Token) m t
 filter = PC.try do
-  keyword "where"
+  _ ← keyword "where"
   definedExpr
 
 groupBy
   ∷ ∀ t m
-  . (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m)
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
   ⇒ P.ParserT (Array Token) m (Sig.GroupBy t)
 groupBy = PC.try do
-  keyword "group"
-  keyword "by"
+  _ ← keyword "group"
+  _ ← keyword "by"
   keys ← PC.sepBy1 definedExpr $ operator ","
   having ← PC.optionMaybe do
-    keyword "having"
+    _ ← keyword "having"
     definedExpr
   pure $ Sig.GroupBy { keys, having }
 
 
 orderBy
   ∷ ∀ t m
-  . (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m)
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
   ⇒ L.List (Sig.Projection t)
   → P.ParserT (Array Token) m (Sig.OrderBy t)
 orderBy prs = PC.try do
-  keyword "order"
-  keyword "by"
+  _ ← keyword "order"
+  _ ← keyword "by"
   lst ← flip PC.sepBy1 (operator ",") do
     mbV ←
       PC.optionMaybe definedExpr
@@ -632,18 +733,20 @@ orderBy prs = PC.try do
 
 projections
   ∷ ∀ t m
-  . (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m)
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
   ⇒ P.ParserT (Array Token) m (L.List (Sig.Projection t))
 projections = PC.try $ PC.sepBy projection $ operator ","
 
 projection
   ∷ ∀ t m
-  . (Corecursive t (Sig.SqlF EJ.EJsonF), Monad m)
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
   ⇒ P.ParserT (Array Token) m (Sig.Projection t)
 projection = PC.try do
   e ← definedExpr
   a ← PC.optionMaybe do
-    keyword "as"
+    _ ← keyword "as"
     ident
   pure $ Sig.Projection { expr: e, alias: a}
 

@@ -1,4 +1,4 @@
-module SqlSquare.Signature.Ident where
+module SqlSquared.Signature.Ident where
 
 import Prelude
 

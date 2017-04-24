@@ -6,7 +6,7 @@ import Control.Monad.Eff (Eff)
 
 import Data.Either as E
 import Data.Foldable as F
-import SqlSquare (Sql, print, parse)
+import SqlSquared (Sql, print, parse)
 
 import Test.Unit.Console as Console
 

@@ -1,4 +1,4 @@
-module SqlSquare.Signature.JoinType where
+module SqlSquared.Signature.JoinType where
 
 import Prelude
 

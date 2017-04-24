@@ -1,4 +1,4 @@
-module SqlSquare.Signature.Projection where
+module SqlSquared.Signature.Projection where
 
 import Prelude
 
@@ -11,7 +11,7 @@ import Data.Newtype (class Newtype)
 
 import Matryoshka (Algebra, CoalgebraM)
 
-import SqlSquare.Utils ((∘))
+import SqlSquared.Utils ((∘))
 
 import Test.StrongCheck.Arbitrary as SC
 import Test.StrongCheck.Gen as Gen

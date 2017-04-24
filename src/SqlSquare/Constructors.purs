@@ -1,4 +1,4 @@
-module SqlSquare.Constructors where
+module SqlSquared.Constructors where
 
 import Prelude
 
@@ -12,29 +12,29 @@ import Data.Maybe (Maybe(..))
 
 import Matryoshka (class Corecursive, embed)
 
-import SqlSquare.Signature as Sig
-import SqlSquare.Utils ((∘))
+import SqlSquared.Signature as Sig
+import SqlSquared.Utils ((∘))
 
 vari ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ String → t
-vari s = embed $ Sig.Vari s
+vari = embed ∘ Sig.Vari
 
 bool ∷ ∀ t. Corecursive t (Sig.SqlF EJsonF) ⇒ Boolean → t
-bool b = embed $ Sig.Literal $ Boolean b
+bool = embed ∘ Sig.Literal ∘ Boolean
 
 null ∷ ∀ t. Corecursive t (Sig.SqlF EJsonF) ⇒ t
 null = embed $ Sig.Literal Null
 
 int ∷ ∀ t. Corecursive t (Sig.SqlF EJsonF) ⇒ Int → t
-int i = embed $ Sig.Literal $ Integer i
+int = embed ∘ Sig.Literal ∘ Integer
 
 num ∷ ∀ t. Corecursive t (Sig.SqlF EJsonF) ⇒ Number → t
-num i = embed $ Sig.Literal $ Decimal $ HN.fromNumber i
+num = embed ∘ Sig.Literal ∘ Decimal ∘ HN.fromNumber
 
 hugeNum ∷ ∀ t. Corecursive t (Sig.SqlF EJsonF) ⇒ HN.HugeNum → t
-hugeNum hn = embed $ Sig.Literal $ Decimal hn
+hugeNum = embed ∘ Sig.Literal ∘ Decimal
 
 string ∷ ∀ t. Corecursive t (Sig.SqlF EJsonF) ⇒ String → t
-string s = embed $ Sig.Literal $ String s
+string = embed ∘ Sig.Literal ∘ String
 
 unop ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ Sig.UnaryOperator → t → t
 unop op expr = embed $ Sig.Unop { op, expr }
@@ -42,20 +42,20 @@ unop op expr = embed $ Sig.Unop { op, expr }
 binop ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ Sig.BinaryOperator → t → t → t
 binop op lhs rhs = embed $ Sig.Binop { op, lhs, rhs }
 
-set ∷ ∀ t f g. (Corecursive t (Sig.SqlF g), F.Foldable f) ⇒ f t → t
-set l = embed $ Sig.SetLiteral $ L.fromFoldable l
+set ∷ ∀ t f g. Corecursive t (Sig.SqlF g) ⇒ F.Foldable f ⇒ f t → t
+set = embed ∘ Sig.SetLiteral ∘ L.fromFoldable
 
-array ∷ ∀ t f. (Corecursive t (Sig.SqlF EJsonF), F.Foldable f) ⇒ f t → t
-array l = embed $ Sig.Literal $ Array $ Arr.fromFoldable l
+array ∷ ∀ t f. Corecursive t (Sig.SqlF EJsonF) ⇒ F.Foldable f ⇒ f t → t
+array = embed ∘ Sig.Literal ∘ Array ∘ Arr.fromFoldable
 
-map_ ∷ ∀ t. (Corecursive t (Sig.SqlF EJsonF), Ord t) ⇒ Map.Map t t → t
-map_ m = embed $ Sig.Literal $ Map ∘ EJsonMap $ Arr.fromFoldable $ Map.toList m
+map_ ∷ ∀ t. Corecursive t (Sig.SqlF EJsonF) ⇒ Ord t ⇒ Map.Map t t → t
+map_ = embed ∘ Sig.Literal ∘ Map ∘ EJsonMap ∘ Map.toUnfoldable
 
 splice ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ Maybe t → t
-splice m = embed $ Sig.Splice m
+splice = embed ∘ Sig.Splice
 
 ident ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ String → t
-ident i = embed $ Sig.Ident i
+ident = embed ∘ Sig.Ident
 
 match ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ t → L.List (Sig.Case t) → Maybe t → t
 match expr cases else_ = embed $ Sig.Match { expr, cases, else_ }
@@ -78,7 +78,8 @@ then_ t f = f t
 
 select
   ∷ ∀ t f
-  . (Corecursive t (Sig.SqlF EJsonF), F.Foldable f)
+  . Corecursive t (Sig.SqlF EJsonF)
+  ⇒ F.Foldable f
   ⇒ Boolean
   → f (Sig.Projection t)
   → Maybe (Sig.Relation t)

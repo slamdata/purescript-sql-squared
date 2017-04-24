@@ -1,4 +1,4 @@
-module SqlSquare.Parser.Tokenizer
+module SqlSquared.Parser.Tokenizer
   ( tokenize
   , Token(..)
   , Literal(..)
@@ -17,7 +17,7 @@ import Data.HugeNum as HN
 import Data.Char as Ch
 import Data.String as S
 
-import SqlSquare.Utils ((∘))
+import SqlSquared.Utils ((∘))
 
 import Text.Parsing.Parser as P
 import Text.Parsing.Parser.Combinators as PC
@@ -166,7 +166,7 @@ oneLineComment =
 
 multiLineComment ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
 multiLineComment = do
-  PS.string "/*"
+  _ ← PS.string "/*"
   m ← collectBeforeComment ""
   pure $ Comment m
   where
@@ -264,7 +264,8 @@ parseNat =
 
 parseNegative
   ∷ ∀ m a
-  . (Monad m, Ring a)
+  . Monad m
+  ⇒ Ring a
   ⇒ P.ParserT String m a
   → P.ParserT String m a
 parseNegative p =
@@ -275,7 +276,8 @@ parseNegative p =
 
 parsePositive
   ∷ ∀ m a
-  . (Monad m, Ring a)
+  . Monad m
+  ⇒ Ring a
   ⇒ P.ParserT String m a
   → P.ParserT String m a
 parsePositive p =
@@ -283,7 +285,11 @@ parsePositive p =
     *> p
 
 parseSigned
-  ∷ ∀ m a. (Monad m, Ring a) ⇒ P.ParserT String m a → P.ParserT String m a
+  ∷ ∀ m a
+  . Monad m
+  ⇒ Ring a
+  ⇒ P.ParserT String m a
+  → P.ParserT String m a
 parseSigned p = parseNegative p  <|> parsePositive p
 
 parseExponent
