@@ -1,4 +1,4 @@
-module SqlSquare.Signature
+module SqlSquared.Signature
   ( BinopR
   , UnopR
   , InvokeFunctionR
@@ -12,7 +12,7 @@ module SqlSquare.Signature
   , decodeJsonSqlF
   , arbitrarySqlF
   , genSql
-  , module SqlSquare.Utils
+  , module SqlSquared.Utils
   , module OT
   , module JT
   , module BO
@@ -45,18 +45,18 @@ import Data.Traversable as T
 
 import Matryoshka (Algebra, CoalgebraM, class Corecursive, embed)
 
-import SqlSquare.Utils (type (×), (×), (∘), (⋙))
+import SqlSquared.Utils (type (×), (×), (∘), (⋙))
 
-import SqlSquare.Signature.BinaryOperator as BO
-import SqlSquare.Signature.Case as CS
-import SqlSquare.Signature.GroupBy as GB
-import SqlSquare.Signature.JoinType as JT
-import SqlSquare.Signature.OrderBy as OB
-import SqlSquare.Signature.OrderType as OT
-import SqlSquare.Signature.Projection as PR
-import SqlSquare.Signature.Relation as RL
-import SqlSquare.Signature.UnaryOperator as UO
-import SqlSquare.Signature.Ident as ID
+import SqlSquared.Signature.BinaryOperator as BO
+import SqlSquared.Signature.Case as CS
+import SqlSquared.Signature.GroupBy as GB
+import SqlSquared.Signature.JoinType as JT
+import SqlSquared.Signature.OrderBy as OB
+import SqlSquared.Signature.OrderType as OT
+import SqlSquared.Signature.Projection as PR
+import SqlSquared.Signature.Relation as RL
+import SqlSquared.Signature.UnaryOperator as UO
+import SqlSquared.Signature.Ident as ID
 
 import Test.StrongCheck.Arbitrary as SC
 import Test.StrongCheck.Gen as Gen

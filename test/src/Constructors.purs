@@ -9,8 +9,8 @@ import Data.NonEmpty as NE
 import Data.Either as E
 import Data.Path.Pathy as Pt
 
-import SqlSquare as S
-import SqlSquare.Utils ((×), (∘))
+import SqlSquared as S
+import SqlSquared.Utils ((×), (∘))
 
 import Test.Unit (suite, test, TestSuite)
 import Test.Unit.Assert as Assert

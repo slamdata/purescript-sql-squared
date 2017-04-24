@@ -1,4 +1,4 @@
-module SqlSquare.Signature.BinaryOperator where
+module SqlSquared.Signature.BinaryOperator where
 
 import Prelude
 

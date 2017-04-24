@@ -20,7 +20,7 @@ type Effects =
   ( testOutput ∷ TESTOUTPUT
   , avar ∷ AVAR
   , console ∷ CONSOLE
-  , err ∷ EXCEPTION
+  , exception ∷ EXCEPTION
   , random ∷ RANDOM
   )
 

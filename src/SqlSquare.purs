@@ -1,4 +1,4 @@
-module SqlSquare
+module SqlSquared
   ( Sql
   , print
   , encodeJson
@@ -19,10 +19,10 @@ import Data.Json.Extended as EJ
 
 import Matryoshka (cata, anaM)
 
-import SqlSquare.Signature as Sig
-import SqlSquare.Lenses as Lenses
-import SqlSquare.Constructors as Constructors
-import SqlSquare.Parser as Parser
+import SqlSquared.Signature as Sig
+import SqlSquared.Lenses as Lenses
+import SqlSquared.Constructors as Constructors
+import SqlSquared.Parser as Parser
 
 import Test.StrongCheck.Gen as Gen
 

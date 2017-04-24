@@ -15,7 +15,7 @@ import Test.StrongCheck as SC
 import Test.StrongCheck.Arbitrary as A
 import Test.Unit.Console as Console
 
-import SqlSquare (Sql, arbitrarySqlOfSize, decodeJson, encodeJson, print, tokenize)
+import SqlSquared (Sql, arbitrarySqlOfSize, decodeJson, encodeJson, print, tokenize)
 
 newtype ArbSql = ArbSql Sql
 
@@ -41,7 +41,7 @@ testTokenizer =
       SC.Success
 
 type TestEffects r =
-  ( err ∷ EXCEPTION
+  ( exception ∷ EXCEPTION
   , random ∷ RANDOM
   , console ∷ CONSOLE
   , testOutput ∷ Console.TESTOUTPUT

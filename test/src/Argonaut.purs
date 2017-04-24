@@ -15,8 +15,8 @@ import Data.Set as Set
 import Data.Tuple (Tuple, fst)
 import Data.Json.Extended.Signature (EJsonF(..))
 
-import SqlSquare as S
-import SqlSquare.Utils ((×), (∘), (⋙))
+import SqlSquared as S
+import SqlSquared.Utils ((×), (∘), (⋙))
 
 import Matryoshka (ana, elgotPara, Coalgebra, ElgotAlgebra)
 

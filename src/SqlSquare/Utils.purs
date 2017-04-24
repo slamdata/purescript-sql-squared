@@ -1,4 +1,4 @@
-module SqlSquare.Utils where
+module SqlSquared.Utils where
 
 import Prelude
 import Data.Tuple (Tuple(..))

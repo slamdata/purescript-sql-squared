@@ -1,4 +1,4 @@
-module SqlSquare.Signature.UnaryOperator where
+module SqlSquared.Signature.UnaryOperator where
 
 import Prelude
 
