@@ -65,6 +65,7 @@ op = map Op $ PC.choice
   , PC.try $ PS.string "..."
   , PC.try $ PS.string ".."
   , PC.try $ PS.string "<>"
+  , PC.try $ PS.string "!="
   , PC.try $ PS.string "||"
   , PC.try $ PS.string "??"
   , PC.try $ PS.string "!~*"
