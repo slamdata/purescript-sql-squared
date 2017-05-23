@@ -1,5 +1,6 @@
 module SqlSquared.Parser
   ( parse
+  , parseTop
   , module SqlSquared.Parser.Tokenizer
   ) where
 
@@ -31,9 +32,19 @@ import Text.Parsing.Parser.Combinators as PC
 import Text.Parsing.Parser.Pos (initialPos)
 
 parse ∷ ∀ t. Corecursive t (Sig.SqlF EJ.EJsonF) ⇒ String → E.Either P.ParseError t
-parse =
-  tokenize
-  >=> flip P.runParser (expr <* eof)
+parse = tokenize >=> flip P.runParser (expr <* eof)
+
+parseTop ∷ ∀ t. Corecursive t (Sig.SqlF EJ.EJsonF) ⇒ String → E.Either P.ParseError (Sig.SqlTopF t)
+parseTop = tokenize >=> flip P.runParser (parseTop' <* eof)
+  where
+  parseDecls =
+    PC.sepBy (import_ <|> functionDecl expr) (operator ";")
+  parseTop' = PC.try do
+    decls ← parseDecls
+    parseQuery decls <|> pure (Sig.Module decls)
+  parseQuery decls = PC.try do
+    operator ";"
+    Sig.Query decls <$> expr
 
 token ∷ ∀ m. Monad m ⇒ P.ParserT (Array Token) m Token
 token = do
@@ -95,16 +106,16 @@ letExpr
   ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
   ⇒ Monad m
   ⇒ P.ParserT (Array Token) m t
-letExpr =
-  (PC.try do
-      operator ":"
-      i ← ident
-      operator ":="
-      bindTo ← expr
-      operator ";"
-      in_ ← expr
-      pure $ embed $ Sig.Let { ident: i, bindTo, in_ } )
-  <|> queryExpr
+letExpr = let_ <|> queryExpr
+  where
+  let_ = PC.try do
+    operator ":"
+    i ← ident
+    operator ":="
+    bindTo ← expr
+    operator ";"
+    in_ ← expr
+    pure $ embed $ Sig.Let { ident: i, bindTo, in_ }
 
 queryExpr
   ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
@@ -387,6 +398,32 @@ functionExpr = PC.try do
   name ← ident
   args ← parenList
   pure $ embed $ Sig.InvokeFunction {name, args}
+
+functionDecl
+  ∷ ∀ m a
+  . Monad m
+  ⇒ P.ParserT (Array Token) m a
+  → P.ParserT (Array Token) m (Sig.SqlDeclF a)
+functionDecl parseExpr = PC.try do
+  _ ← keyword "create"
+  _ ← keyword "function"
+  name ← ident
+  operator "("
+  args ← PC.sepBy (operator ":" *> ident) $ operator ","
+  operator ")"
+  _ ← keyword "begin"
+  body ← parseExpr
+  _ ← keyword "end"
+  pure $ Sig.FunctionDecl { ident: name, args, body }
+
+import_
+  ∷ ∀ m a
+  . Monad m
+  ⇒ P.ParserT (Array Token) m (Sig.SqlDeclF a)
+import_ = PC.try do
+  _ ← keyword "import"
+  s ← ident
+  pure $ Sig.Import s
 
 variable
   ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
