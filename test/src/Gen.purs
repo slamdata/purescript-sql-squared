@@ -15,28 +15,28 @@ import Test.StrongCheck as SC
 import Test.StrongCheck.Arbitrary as A
 import Test.Unit.Console as Console
 
-import SqlSquared (SqlTop, arbitrarySqlTopOfSize, decodeJsonTop, encodeJsonTop, printTop, tokenize)
+import SqlSquared (SqlQuery, arbitrarySqlQueryOfSize, decodeJsonQuery, encodeJsonQuery, printQuery, tokenize)
 
-newtype ArbSql = ArbSql SqlTop
+newtype ArbSql = ArbSql SqlQuery
 
 instance arbitraryArbSql ∷ A.Arbitrary ArbSql where
-  arbitrary = map ArbSql $ arbitrarySqlTopOfSize 3
+  arbitrary = map ArbSql $ arbitrarySqlQueryOfSize 3
 
-newtype ParseableSql = ParseableSql SqlTop
+newtype ParseableSql = ParseableSql SqlQuery
 
 testJsonSerialization ∷ ∀ r. Eff (TestEffects r) Unit
 testJsonSerialization =
-  SC.quickCheck' 50 \(ArbSql sql) → case decodeJsonTop $ encodeJsonTop sql of
+  SC.quickCheck' 50 \(ArbSql sql) → case decodeJsonQuery $ encodeJsonQuery sql of
     E.Right res →
-      res == sql <?> "Mismatch:\n" <> printTop sql <> "\n" <> printTop res
+      res == sql <?> "Mismatch:\n" <> printQuery sql <> "\n" <> printQuery res
     E.Left err →
-      SC.Failed $ "Argonaut codecs  error: " <> err <> " \n" <> printTop sql
+      SC.Failed $ "Argonaut codecs  error: " <> err <> " \n" <> printQuery sql
 
 testTokenizer ∷ ∀ r. Eff (TestEffects r) Unit
 testTokenizer =
-  SC.quickCheck' 50 \(ArbSql sql) → case tokenize $ printTop sql of
+  SC.quickCheck' 50 \(ArbSql sql) → case tokenize $ printQuery sql of
     E.Left err →
-      SC.Failed $ "Tokenizer  error: " <> show err <> " \n" <> printTop sql
+      SC.Failed $ "Tokenizer  error: " <> show err <> " \n" <> printQuery sql
     E.Right _ →
       SC.Success
 

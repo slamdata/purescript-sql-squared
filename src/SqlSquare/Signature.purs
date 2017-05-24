@@ -9,19 +9,24 @@ module SqlSquared.Signature
   , FunctionDeclR
   , SqlF(..)
   , SqlDeclF(..)
-  , SqlTopF(..)
+  , SqlQueryF(..)
+  , SqlModuleF(..)
   , printSqlF
   , printSqlDeclF
-  , printSqlTopF
+  , printSqlQueryF
+  , printSqlModuleF
   , encodeJsonSqlF
   , encodeJsonSqlDeclF
-  , encodeJsonSqlTopF
+  , encodeJsonSqlQueryF
+  , encodeJsonSqlModuleF
   , decodeJsonSqlF
   , decodeJsonSqlDeclF
-  , decodeJsonSqlTopF
+  , decodeJsonSqlQueryF
+  , decodeJsonSqlModuleF
   , arbitrarySqlF
   , arbitrarySqlDeclF
-  , arbitrarySqlTopF
+  , arbitrarySqlQueryF
+  , arbitrarySqlModuleF
   , genSql
   , module SqlSquared.Utils
   , module OT
@@ -50,6 +55,7 @@ import Data.List ((:))
 import Data.HugeNum as HN
 import Data.Maybe (Maybe(..))
 import Data.Monoid (mempty)
+import Data.Newtype (class Newtype)
 import Data.Ord (class Ord1, compare1)
 import Data.String as S
 import Data.Traversable as T
@@ -139,9 +145,11 @@ data SqlDeclF a
   = Import String
   | FunctionDecl (FunctionDeclR a)
 
-data SqlTopF a
-  = Query (L.List (SqlDeclF a)) a
-  | Module (L.List (SqlDeclF a))
+newtype SqlModuleF a =
+  Module (L.List (SqlDeclF a))
+
+data SqlQueryF a =
+  Query (L.List (SqlDeclF a)) a
 
 derive instance eqSqlF ∷ (Eq a, Eq (l a)) ⇒ Eq (SqlF l a)
 derive instance ordSqlF ∷ (Ord a, Ord (l a)) ⇒ Ord (SqlF l a)
@@ -149,8 +157,12 @@ derive instance ordSqlF ∷ (Ord a, Ord (l a)) ⇒ Ord (SqlF l a)
 derive instance eqSqlDeclF ∷ Eq a ⇒ Eq (SqlDeclF a)
 derive instance ordSqlDeclF ∷ Ord a ⇒ Ord (SqlDeclF a)
 
-derive instance eqSqlTopF ∷ Eq a ⇒ Eq (SqlTopF a)
-derive instance ordSqlTopF ∷ Ord a ⇒ Ord (SqlTopF a)
+derive instance eqSqlModuleF ∷ Eq a ⇒ Eq (SqlModuleF a)
+derive instance ordSqlModuleF ∷ Ord a ⇒ Ord (SqlModuleF a)
+derive instance newtypeSqlModuleF ∷ Newtype (SqlModuleF a) _
+
+derive instance eqSqlQueryF ∷ Eq a ⇒ Eq (SqlQueryF a)
+derive instance ordSqlQueryF ∷ Ord a ⇒ Ord (SqlQueryF a)
 
 instance eq1SqlF ∷ Eq1 l ⇒ Eq1 (SqlF l) where
   eq1 (SetLiteral lst) (SetLiteral llst) = eq lst llst
@@ -200,10 +212,11 @@ instance eq1SqlDeclF ∷ Eq1 SqlDeclF where
     && r.body == rr.body
   eq1 _ _ = false
 
-instance eq1SqlTopF ∷ Eq1 SqlTopF where
+instance eq1SqlQueryF ∷ Eq1 SqlQueryF where
   eq1 (Query a c) (Query b d) = a == b && c == d
+
+instance eq1SqlModuleF ∷ Eq1 SqlModuleF where
   eq1 (Module a) (Module b) = a == b
-  eq1 _ _ = false
 
 instance ord1SqlF ∷ Ord1 l ⇒ Ord1 (SqlF l) where
   compare1 (Literal l) (Literal ll) = compare1 l ll
@@ -274,15 +287,16 @@ instance ord1SqlDeclF ∷ Ord1 SqlDeclF where
     <> compare r.args rr.args
     <> compare r.body rr.body
 
-instance ord1SqlTopF ∷ Ord1 SqlTopF where
+instance ord1SqlQueryF ∷ Ord1 SqlQueryF where
   compare1 (Query a c) (Query b d) = compare a b <> compare c d
-  compare1 (Query _ _) _ = LT
-  compare1 _ (Query _ _) = GT
+
+instance ord1SqlModuleF ∷ Ord1 SqlModuleF where
   compare1 (Module a) (Module b) = compare a b
 
 derive instance functorSqlF ∷ Functor l ⇒ Functor (SqlF l)
 derive instance functorSqlDeclF ∷ Functor SqlDeclF
-derive instance functorSqlTopF ∷ Functor SqlTopF
+derive instance functorSqlQueryF ∷ Functor SqlQueryF
+derive instance functorSqlModuleF ∷ Functor SqlModuleF
 
 instance foldableSqlF ∷ F.Foldable l ⇒ F.Foldable (SqlF l) where
   foldMap f = case _ of
@@ -370,16 +384,15 @@ instance foldableSqlDeclF ∷ F.Foldable SqlDeclF where
     FunctionDecl r → f r.body a
     Import _ → a
 
-instance foldableSqlTopF ∷ F.Foldable SqlTopF where
-  foldMap f = case _ of
-    Query r s → F.foldMap (F.foldMap f) r <> f s
-    Module r → F.foldMap (F.foldMap f) r
-  foldl f a = case _ of
-    Query r s → f (F.foldl (F.foldl f) a r) s
-    Module r → F.foldl (F.foldl f) a r
-  foldr f a = case _ of
-    Query r s → F.foldr (\x a' → F.foldr f a' x) (f s a) r
-    Module r → F.foldr (\x a' → F.foldr f a' x) a r
+instance foldableSqlQueryF ∷ F.Foldable SqlQueryF where
+  foldMap f (Query r s) = F.foldMap (F.foldMap f) r <> f s
+  foldl f a (Query r s) = f (F.foldl (F.foldl f) a r) s
+  foldr f a (Query r s) = F.foldr (\x a' → F.foldr f a' x) (f s a) r
+
+instance foldableSqlModuleF ∷ F.Foldable SqlModuleF where
+  foldMap f (Module r) = F.foldMap (F.foldMap f) r
+  foldl f a (Module r) = F.foldl (F.foldl f) a r
+  foldr f a (Module r) = F.foldr (\x a' → F.foldr f a' x) a r
 
 instance traversableSqlF ∷ T.Traversable l ⇒ T.Traversable (SqlF l) where
   traverse f = case _ of
@@ -430,10 +443,12 @@ instance traversableSqlDeclF ∷ T.Traversable SqlDeclF where
     Import r → pure $ Import r
   sequence = T.sequenceDefault
 
-instance traversableSqlTopF ∷ T.Traversable SqlTopF where
-  traverse f = case _ of
-    Query r s → Query <$> T.traverse (T.traverse f) r <*> f s
-    Module r → Module <$> T.traverse (T.traverse f) r
+instance traversableSqlQueryF ∷ T.Traversable SqlQueryF where
+  traverse f (Query r s) = Query <$> T.traverse (T.traverse f) r <*> f s
+  sequence = T.sequenceDefault
+
+instance traversableSqlModuleF ∷ T.Traversable SqlModuleF where
+  traverse f (Module r) = Module <$> T.traverse (T.traverse f) r
   sequence = T.sequenceDefault
 
 printSqlF ∷ ∀ l. Algebra l String → Algebra (SqlF l) String
@@ -490,17 +505,13 @@ printSqlDeclF = case _ of
     <> body
     <> " END"
   Import s →
-    ID.printIdent s
+    "IMPORT " <> ID.printIdent s
 
-printSqlTopF ∷ Algebra SqlTopF String
-printSqlTopF = case _ of
-  Query decls expr →
-    F.intercalate "; "
-    $ L.snoc (printSqlDeclF <$> decls)
-    $ expr
-  Module decls →
-    F.intercalate "; "
-    $ printSqlDeclF <$> decls
+printSqlQueryF ∷ Algebra SqlQueryF String
+printSqlQueryF (Query decls expr) = F.intercalate "; " $ L.snoc (printSqlDeclF <$> decls) expr
+
+printSqlModuleF ∷ Algebra SqlModuleF String
+printSqlModuleF (Module decls) = F.intercalate "; " $ printSqlDeclF <$> decls
 
 encodeJsonSqlF ∷ ∀ l. Algebra l J.Json → Algebra (SqlF l) J.Json
 encodeJsonSqlF alg = case _ of
@@ -584,17 +595,18 @@ encodeJsonSqlDeclF = case _ of
     J.~> "value" J.:= s
     J.~> J.jsonEmptyObject
 
-encodeJsonSqlTopF ∷ Algebra SqlTopF J.Json
-encodeJsonSqlTopF = case _ of
-  Query decls expr →
-    "tag" J.:= "query"
-    J.~> "decls" J.:= (encodeJsonSqlDeclF <$> decls)
-    J.~> "expr" J.:= expr
-    J.~> J.jsonEmptyObject
-  Module decls →
-    "tag" J.:= "module"
-    J.~> "decls" J.:= (encodeJsonSqlDeclF <$> decls)
-    J.~> J.jsonEmptyObject
+encodeJsonSqlQueryF ∷ Algebra SqlQueryF J.Json
+encodeJsonSqlQueryF (Query decls expr) =
+  "tag" J.:= "query"
+  J.~> "decls" J.:= (encodeJsonSqlDeclF <$> decls)
+  J.~> "expr" J.:= expr
+  J.~> J.jsonEmptyObject
+
+encodeJsonSqlModuleF ∷ Algebra SqlModuleF J.Json
+encodeJsonSqlModuleF (Module decls) =
+  "tag" J.:= "module"
+  J.~> "decls" J.:= (encodeJsonSqlDeclF <$> decls)
+  J.~> J.jsonEmptyObject
 
 decodeJsonSqlF
   ∷ ∀ l
@@ -704,23 +716,24 @@ decodeJsonSqlDeclF = J.decodeJson >=> \obj → do
     v ← obj J..? "value"
     pure $ Import v
 
-decodeJsonSqlTopF ∷ CoalgebraM (E.Either String) SqlTopF J.Json
-decodeJsonSqlTopF = J.decodeJson >=> \obj → do
+decodeJsonSqlQueryF ∷ CoalgebraM (E.Either String) SqlQueryF J.Json
+decodeJsonSqlQueryF = J.decodeJson >=> \obj → do
   tag ← obj J..? "tag"
   case tag of
-    "query" → decodeQuery obj
-    "module" → decodeModule obj
+    "query" → do
+      decls ← T.traverse decodeJsonSqlDeclF =<< obj J..? "decls"
+      expr ← obj J..? "expr"
+      pure $ Query decls expr
     _ → E.Left $ "Invalid top-level SQL^2 production: " <> tag
 
-  where
-  decodeQuery obj = do
-    decls ← T.traverse decodeJsonSqlDeclF =<< obj J..? "decls"
-    expr ← obj J..? "expr"
-    pure $ Query decls expr
-
-  decodeModule obj = do
-    decls ← T.traverse decodeJsonSqlDeclF =<< obj J..? "decls"
-    pure $ Module decls
+decodeJsonSqlModuleF ∷ CoalgebraM (E.Either String) SqlModuleF J.Json
+decodeJsonSqlModuleF = J.decodeJson >=> \obj → do
+  tag ← obj J..? "tag"
+  case tag of
+    "module" → do
+      decls ← T.traverse decodeJsonSqlDeclF =<< obj J..? "decls"
+      pure $ Module decls
+    _ → E.Left $ "Invalid top-level SQL^2 production: " <> tag
 
 arbitrarySqlF
   ∷ ∀ l
@@ -754,11 +767,11 @@ arbitrarySqlDeclF n =
     [ genFunctionDecl n
     ]
 
-arbitrarySqlTopF ∷ CoalgebraM Gen.Gen SqlTopF Int
-arbitrarySqlTopF n =
-  Gen.oneOf (genQuery n)
-    [ genModule n
-    ]
+arbitrarySqlQueryF ∷ CoalgebraM Gen.Gen SqlQueryF Int
+arbitrarySqlQueryF n = Query <$> genDecls n <*> pure n
+
+arbitrarySqlModuleF ∷ CoalgebraM Gen.Gen SqlModuleF Int
+arbitrarySqlModuleF n = Module <$> genDecls n
 
 genSetLiteral ∷ ∀ l. CoalgebraM Gen.Gen (SqlF l) Int
 genSetLiteral n = do
@@ -885,12 +898,6 @@ genDecls n = do
       pure $ cs L.: acc
   len ← Gen.chooseInt 0 $ n - 1
   L.foldM foldFn L.Nil $ L.range 0 len
-
-genQuery ∷ CoalgebraM Gen.Gen SqlTopF Int
-genQuery n = Query <$> genDecls n <*> pure n
-
-genModule ∷ CoalgebraM Gen.Gen SqlTopF Int
-genModule n = Module <$> genDecls n
 
 -- This one is one gigantic TODO: generation Sql² AST that
 -- can be constructed using parsing. Since parsing is

@@ -1,14 +1,19 @@
 module SqlSquared
   ( Sql
-  , SqlTop
+  , SqlQuery
+  , SqlModule
   , print
-  , printTop
+  , printQuery
+  , printModule
   , encodeJson
-  , encodeJsonTop
+  , encodeJsonQuery
+  , encodeJsonModule
   , decodeJson
-  , decodeJsonTop
+  , decodeJsonQuery
+  , decodeJsonModule
   , arbitrarySqlOfSize
-  , arbitrarySqlTopOfSize
+  , arbitrarySqlQueryOfSize
+  , arbitrarySqlModuleOfSize
   , module Sig
   , module Lenses
   , module Constructors
@@ -34,28 +39,42 @@ import Test.StrongCheck.Gen as Gen
 
 type Sql = Mu (Sig.SqlF EJ.EJsonF)
 
-type SqlTop = Sig.SqlTopF Sql
+type SqlQuery = Sig.SqlQueryF Sql
+
+type SqlModule = Sig.SqlModuleF Sql
 
 print ∷ Sql → String
 print = cata $ Sig.printSqlF EJ.renderEJsonF
 
-printTop ∷ SqlTop → String
-printTop = Sig.printSqlTopF <<< map print
+printQuery ∷ SqlQuery → String
+printQuery = Sig.printSqlQueryF <<< map print
+
+printModule ∷ SqlModule → String
+printModule = Sig.printSqlModuleF <<< map print
 
 encodeJson ∷ Sql → J.Json
 encodeJson = cata $ Sig.encodeJsonSqlF EJ.encodeJsonEJsonF
 
-encodeJsonTop ∷ SqlTop → J.Json
-encodeJsonTop = Sig.encodeJsonSqlTopF <<< map encodeJson
+encodeJsonQuery ∷ SqlQuery → J.Json
+encodeJsonQuery = Sig.encodeJsonSqlQueryF <<< map encodeJson
+
+encodeJsonModule ∷ SqlModule → J.Json
+encodeJsonModule = Sig.encodeJsonSqlModuleF <<< map encodeJson
 
 decodeJson ∷ J.Json → Either String Sql
 decodeJson = anaM $ Sig.decodeJsonSqlF EJ.decodeJsonEJsonF
 
-decodeJsonTop ∷ J.Json → Either String SqlTop
-decodeJsonTop = traverse decodeJson <=< Sig.decodeJsonSqlTopF
+decodeJsonQuery ∷ J.Json → Either String SqlQuery
+decodeJsonQuery = traverse decodeJson <=< Sig.decodeJsonSqlQueryF
+
+decodeJsonModule ∷ J.Json → Either String SqlModule
+decodeJsonModule = traverse decodeJson <=< Sig.decodeJsonSqlModuleF
 
 arbitrarySqlOfSize ∷ Int → Gen.Gen Sql
 arbitrarySqlOfSize = anaM $ Sig.arbitrarySqlF EJ.arbitraryEJsonF
 
-arbitrarySqlTopOfSize ∷ Int → Gen.Gen SqlTop
-arbitrarySqlTopOfSize = traverse arbitrarySqlOfSize <=< Sig.arbitrarySqlTopF
+arbitrarySqlQueryOfSize ∷ Int → Gen.Gen SqlQuery
+arbitrarySqlQueryOfSize = traverse arbitrarySqlOfSize <=< Sig.arbitrarySqlQueryF
+
+arbitrarySqlModuleOfSize ∷ Int → Gen.Gen SqlModule
+arbitrarySqlModuleOfSize = traverse arbitrarySqlOfSize <=< Sig.arbitrarySqlModuleF

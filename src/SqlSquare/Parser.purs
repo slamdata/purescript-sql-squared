@@ -1,6 +1,7 @@
 module SqlSquared.Parser
   ( parse
-  , parseTop
+  , parseQuery
+  , parseModule
   , module SqlSquared.Parser.Tokenizer
   ) where
 
@@ -31,20 +32,37 @@ import Text.Parsing.Parser as P
 import Text.Parsing.Parser.Combinators as PC
 import Text.Parsing.Parser.Pos (initialPos)
 
-parse ∷ ∀ t. Corecursive t (Sig.SqlF EJ.EJsonF) ⇒ String → E.Either P.ParseError t
+parse
+  ∷ ∀ t
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ String
+  → E.Either P.ParseError t
 parse = tokenize >=> flip P.runParser (expr <* eof)
 
-parseTop ∷ ∀ t. Corecursive t (Sig.SqlF EJ.EJsonF) ⇒ String → E.Either P.ParseError (Sig.SqlTopF t)
-parseTop = tokenize >=> flip P.runParser (parseTop' <* eof)
+parseQuery
+  ∷ ∀ t
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ String
+  → E.Either P.ParseError (Sig.SqlQueryF t)
+parseQuery = tokenize >=> flip P.runParser (go <* eof)
   where
-  parseDecls =
-    PC.sepBy (import_ <|> functionDecl expr) (operator ";")
-  parseTop' = PC.try do
-    decls ← parseDecls
-    parseQuery decls <|> pure (Sig.Module decls)
-  parseQuery decls = PC.try do
-    operator ";"
-    Sig.Query decls <$> expr
+  go = Sig.Query <$> decls <*> expr
+
+parseModule
+  ∷ ∀ t
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ String
+  → E.Either P.ParseError (Sig.SqlModuleF t)
+parseModule = tokenize >=> flip P.runParser (go <* eof)
+  where
+  go = Sig.Module <$> decls
+
+decls
+  ∷ ∀ t m
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
+  ⇒ Monad m
+  ⇒ P.ParserT (Array Token) m (L.List (Sig.SqlDeclF t))
+decls = PC.sepEndBy (import_ <|> functionDecl expr) $ operator ";"
 
 token ∷ ∀ m. Monad m ⇒ P.ParserT (Array Token) m Token
 token = do
@@ -97,13 +115,15 @@ match ∷ ∀ m. Monad m ⇒ Token → P.ParserT (Array Token) m Token
 match = whenTok ∘ eq
 
 expr
-  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ∷ ∀ t m
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
   ⇒ Monad m
   ⇒ P.ParserT (Array Token) m t
 expr = letExpr
 
 letExpr
-  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ∷ ∀ t m
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
   ⇒ Monad m
   ⇒ P.ParserT (Array Token) m t
 letExpr = let_ <|> queryExpr
@@ -118,7 +138,8 @@ letExpr = let_ <|> queryExpr
     pure $ embed $ Sig.Let { ident: i, bindTo, in_ }
 
 queryExpr
-  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ∷ ∀ t m
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
   ⇒ Monad m
   ⇒ P.ParserT (Array Token) m t
 queryExpr = PC.try do
@@ -140,12 +161,15 @@ queryBinop =
 
 -- TODO, add update and delete
 query
-  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ∷ ∀ t m
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
   ⇒ Monad m
   ⇒ P.ParserT (Array Token) m t
 query = selectExpr
 
-definedExpr ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+definedExpr
+  ∷ ∀ t m
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
   ⇒ Monad m
   ⇒ P.ParserT (Array Token) m t
 definedExpr = PC.try do
@@ -153,7 +177,8 @@ definedExpr = PC.try do
     embed $ Sig.Binop { lhs, rhs, op: Sig.IfUndefined }
 
 rangeExpr
-  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ∷ ∀ t m
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
   ⇒ Monad m
   ⇒ P.ParserT (Array Token) m t
 rangeExpr = PC.try do
@@ -161,7 +186,8 @@ rangeExpr = PC.try do
     embed $ Sig.Binop { lhs, rhs, op: Sig.Range }
 
 orExpr
-  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ∷ ∀ t m
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
   ⇒ Monad m
   ⇒ P.ParserT (Array Token) m t
 orExpr = PC.try do
@@ -169,7 +195,8 @@ orExpr = PC.try do
     embed $ Sig.Binop { lhs, rhs, op: Sig.Or }
 
 andExpr
-  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ∷ ∀ t m
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
   ⇒ Monad m
   ⇒ P.ParserT (Array Token) m t
 andExpr = PC.try do
@@ -177,7 +204,8 @@ andExpr = PC.try do
     embed $ Sig.Binop { lhs, rhs, op: Sig.And }
 
 cmpExpr
-  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ∷ ∀ t m
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
   ⇒ Monad m
   ⇒ P.ParserT (Array Token) m t
 cmpExpr = PC.try do
@@ -186,14 +214,16 @@ cmpExpr = PC.try do
   pure $ F.foldl (\acc fn → fn acc) e modifiers
 
 defaultExpr
-  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ∷ ∀ t m
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
   ⇒ Monad m
   ⇒ P.ParserT (Array Token) m t
 defaultExpr = PC.try do
   prod concatExpr searchLikeOp \lhs rhs op → op lhs rhs
 
 searchLikeOp
-  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ∷ ∀ t m
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
   ⇒ Monad m
   ⇒ P.ParserT (Array Token) m (t → t → t)
 searchLikeOp =
@@ -205,7 +235,8 @@ searchLikeOp =
   <|> (operator "!~~" $> (\a b → _NOT $ _LIKE Nothing a b))
 
 concatExpr
-  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ∷ ∀ t m
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
   ⇒ Monad m
   ⇒ P.ParserT (Array Token) m t
 concatExpr = PC.try do
@@ -213,7 +244,8 @@ concatExpr = PC.try do
     embed $ Sig.Binop {op: Sig.Concat, lhs, rhs}
 
 addExpr
-  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ∷ ∀ t m
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
   ⇒ Monad m
   ⇒ P.ParserT (Array Token) m t
 addExpr = PC.try do
@@ -221,7 +253,8 @@ addExpr = PC.try do
     embed $ Sig.Binop {op, lhs, rhs}
 
 multExpr
-  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ∷ ∀ t m
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
   ⇒ Monad m
   ⇒ P.ParserT (Array Token) m t
 multExpr = PC.try do
@@ -232,7 +265,8 @@ multExpr = PC.try do
     \lhs rhs op → embed $ Sig.Binop {op, lhs, rhs}
 
 powExpr
-  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ∷ ∀ t m
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
   ⇒ Monad m
   ⇒ P.ParserT (Array Token) m t
 powExpr = PC.try do
@@ -240,7 +274,8 @@ powExpr = PC.try do
     embed $ Sig.Binop {op: Sig.Pow, lhs, rhs}
 
 derefExpr
-  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ∷ ∀ t m
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
   ⇒ Monad m
   ⇒ P.ParserT (Array Token) m t
 derefExpr = PC.try do
@@ -285,7 +320,8 @@ derefExpr = PC.try do
             pure \e → embed $ Sig.Binop { op: Sig.IndexDeref, lhs: e, rhs })
 
 wildcard
-  ∷ ∀ m t. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ∷ ∀ m t
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
   ⇒ Monad m
   ⇒ P.ParserT (Array Token) m t
 wildcard = operator "*" $> embed (Sig.Splice Nothing)
@@ -311,7 +347,8 @@ primaryExpression =
   <|> (ident <#> (embed ∘ Sig.Ident))
 
 caseExpr
-  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ∷ ∀ t m
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
   ⇒ Monad m
   ⇒ P.ParserT (Array Token) m t
 caseExpr =
@@ -346,7 +383,8 @@ cases = PC.try do
   pure $ cs × else_
 
 unshiftExpr
-  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ∷ ∀ t m
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
   ⇒ Monad m
   ⇒ P.ParserT (Array Token) m t
 unshiftExpr =
@@ -377,7 +415,8 @@ parenList = PC.try do
   pure $ L.fromFoldable arr
 
 unaryOperator
-  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ∷ ∀ t m
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
   ⇒ Monad m
   ⇒ P.ParserT (Array Token) m t
 unaryOperator = PC.try do
@@ -391,7 +430,8 @@ unaryOperator = PC.try do
   pure $ embed $ Sig.Unop { op, expr: e}
 
 functionExpr
-  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ∷ ∀ t m
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
   ⇒ Monad m
   ⇒ P.ParserT (Array Token) m t
 functionExpr = PC.try do
@@ -426,7 +466,8 @@ import_ = PC.try do
   pure $ Sig.Import s
 
 variable
-  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ∷ ∀ t m
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
   ⇒ Monad m
   ⇒ P.ParserT (Array Token) m t
 variable = PC.try do
@@ -435,7 +476,8 @@ variable = PC.try do
   pure $ embed $ Sig.Vari s
 
 literal
-  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ∷ ∀ t m
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
   ⇒ Monad m
   ⇒ P.ParserT (Array Token) m t
 literal = PC.try $ token >>= case _ of
@@ -448,7 +490,8 @@ literal = PC.try $ token >>= case _ of
   _ → P.fail "incorrect literal"
 
 arrayLiteral
-  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ∷ ∀ t m
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
   ⇒ Monad m
   ⇒ P.ParserT (Array Token) m t
 arrayLiteral = PC.try do
@@ -458,7 +501,8 @@ arrayLiteral = PC.try do
   pure $ embed $ Sig.Literal $ EJ.Array $ A.fromFoldable els
 
 mapLiteral
-  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ∷ ∀ t m
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
   ⇒ Monad m
   ⇒ P.ParserT (Array Token) m t
 mapLiteral = PC.try do
@@ -468,7 +512,8 @@ mapLiteral = PC.try do
   pure $ embed $ Sig.Literal $ EJ.Map $ EJ.EJsonMap $ A.fromFoldable els
 
 pair
-  ∷ ∀ t m. Corecursive t (Sig.SqlF EJ.EJsonF)
+  ∷ ∀ t m
+  . Corecursive t (Sig.SqlF EJ.EJsonF)
   ⇒ Monad m
   ⇒ P.ParserT (Array Token) m (t × t)
 pair = PC.try do
@@ -525,7 +570,6 @@ likeSuffix = PC.try do
     _ ← keyword "escape"
     defaultExpr
   pure $ \lhs → _LIKE mbEsc lhs rhs
-
 
 relationalSuffix
   ∷ ∀ t m
@@ -665,8 +709,6 @@ exprRelation = PC.try do
   i ← ident
   pure $ Sig.ExprRelation { aliasName: i, expr: e }
 
-
-
 stdJoinRelation
   ∷ ∀ t m
   . Corecursive t (Sig.SqlF EJ.EJsonF)
@@ -697,6 +739,7 @@ stdJoinRelation = PC.try do
       , joinType
       , clause
       }
+
 crossJoinRelation
   ∷ ∀ t m
   . Corecursive t (Sig.SqlF EJ.EJsonF)
@@ -713,7 +756,6 @@ crossJoinRelation = PC.try do
       , right
       , clause: embed $ Sig.Literal $ EJ.Boolean true
       }
-
 
 filter
   ∷ ∀ t m
@@ -737,7 +779,6 @@ groupBy = PC.try do
     _ ← keyword "having"
     definedExpr
   pure $ Sig.GroupBy { keys, having }
-
 
 orderBy
   ∷ ∀ t m
@@ -787,8 +828,7 @@ projection = PC.try do
     ident
   pure $ Sig.Projection { expr: e, alias: a}
 
-
-_SEARCH ∷ ∀ t.Corecursive t (Sig.SqlF EJ.EJsonF) ⇒ Boolean → t → t → t
+_SEARCH ∷ ∀ t. Corecursive t (Sig.SqlF EJ.EJsonF) ⇒ Boolean → t → t → t
 _SEARCH b lhs rhs =
   embed
   $ Sig.InvokeFunction
@@ -800,7 +840,7 @@ _SEARCH b lhs rhs =
       : L.Nil
     }
 
-_LIKE ∷ ∀ t.Corecursive t (Sig.SqlF EJ.EJsonF) ⇒ Maybe t → t → t → t
+_LIKE ∷ ∀ t. Corecursive t (Sig.SqlF EJ.EJsonF) ⇒ Maybe t → t → t → t
 _LIKE mbEsc lhs rhs =
   embed
   $ Sig.InvokeFunction
