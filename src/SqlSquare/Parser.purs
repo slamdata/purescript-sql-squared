@@ -46,7 +46,10 @@ parseQuery
   → E.Either P.ParseError (Sig.SqlQueryF t)
 parseQuery = tokenize >=> flip P.runParser (go <* eof)
   where
-  go = Sig.Query <$> decls <*> expr
+  go =
+    Sig.Query
+      <$> (PC.sepEndBy (import_ <|> functionDecl expr) $ operator ";")
+      <*> expr
 
 parseModule
   ∷ ∀ t
@@ -55,14 +58,7 @@ parseModule
   → E.Either P.ParseError (Sig.SqlModuleF t)
 parseModule = tokenize >=> flip P.runParser (go <* eof)
   where
-  go = Sig.Module <$> decls
-
-decls
-  ∷ ∀ t m
-  . Corecursive t (Sig.SqlF EJ.EJsonF)
-  ⇒ Monad m
-  ⇒ P.ParserT (Array Token) m (L.List (Sig.SqlDeclF t))
-decls = PC.sepEndBy (import_ <|> functionDecl expr) $ operator ";"
+  go = Sig.Module <$> (PC.sepBy (import_ <|> functionDecl expr) $ operator ";")
 
 token ∷ ∀ m. Monad m ⇒ P.ParserT (Array Token) m Token
 token = do
