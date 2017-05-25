@@ -6,7 +6,7 @@ import Control.Monad.Eff (Eff)
 
 import Data.Either as E
 import Data.Foldable as F
-import SqlSquared (Sql, print, parse)
+import SqlSquared (printQuery, parseQuery)
 
 import Test.Unit.Console as Console
 
@@ -15,13 +15,13 @@ import Debug.Trace as DT
 testPrintParse ∷ ∀ e. String → Eff (testOutput ∷ Console.TESTOUTPUT|e) Unit
 testPrintParse s = do
   Console.printLabel $ "Testing: \n" <> s <> "\n"
-  let parsed = parse s
+  let parsed = parseQuery s
   case parsed of
     E.Left e → Console.printFail $ "Fail: " <> show e <> "\n"
-    E.Right (sql ∷ Sql) → do
+    E.Right sql → do
       Console.printPass "Success: \n"
       DT.traceAnyA sql
-      Console.printPass $ print sql
+      Console.printPass $ printQuery sql
       Console.printPass "\n"
 
 inputs ∷ Array String
@@ -45,6 +45,8 @@ inputs =
   , """-- comment
 select 12
 """
+  , """import foo; select * from `/test`"""
+  , """create function foo(:bar) begin :bar + 2 end; select * from `/test` where foo = foo(42)"""
   ]
 
 

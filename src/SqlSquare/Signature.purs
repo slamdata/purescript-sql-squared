@@ -6,11 +6,27 @@ module SqlSquared.Signature
   , SwitchR
   , LetR
   , SelectR
+  , FunctionDeclR
   , SqlF(..)
+  , SqlDeclF(..)
+  , SqlQueryF(..)
+  , SqlModuleF(..)
   , printSqlF
+  , printSqlDeclF
+  , printSqlQueryF
+  , printSqlModuleF
   , encodeJsonSqlF
+  , encodeJsonSqlDeclF
+  , encodeJsonSqlQueryF
+  , encodeJsonSqlModuleF
   , decodeJsonSqlF
+  , decodeJsonSqlDeclF
+  , decodeJsonSqlQueryF
+  , decodeJsonSqlModuleF
   , arbitrarySqlF
+  , arbitrarySqlDeclF
+  , arbitrarySqlQueryF
+  , arbitrarySqlModuleF
   , genSql
   , module SqlSquared.Utils
   , module OT
@@ -39,6 +55,7 @@ import Data.List ((:))
 import Data.HugeNum as HN
 import Data.Maybe (Maybe(..))
 import Data.Monoid (mempty)
+import Data.Newtype (class Newtype)
 import Data.Ord (class Ord1, compare1)
 import Data.String as S
 import Data.Traversable as T
@@ -95,12 +112,18 @@ type LetR a =
   }
 
 type SelectR a =
-  { isDistinct ∷  Boolean
+  { isDistinct ∷ Boolean
   , projections ∷ L.List (PR.Projection a)
   , relations ∷ Maybe (RL.Relation a)
   , filter ∷ Maybe a
   , groupBy ∷ Maybe (GB.GroupBy a)
   , orderBy ∷ Maybe (OB.OrderBy a)
+  }
+
+type FunctionDeclR a =
+  { ident ∷ String
+  , args ∷ L.List String
+  , body ∷ a
   }
 
 data SqlF literal a
@@ -118,8 +141,28 @@ data SqlF literal a
   | Select (SelectR a)
   | Parens a
 
+data SqlDeclF a
+  = Import String
+  | FunctionDecl (FunctionDeclR a)
+
+newtype SqlModuleF a =
+  Module (L.List (SqlDeclF a))
+
+data SqlQueryF a =
+  Query (L.List (SqlDeclF a)) a
+
 derive instance eqSqlF ∷ (Eq a, Eq (l a)) ⇒ Eq (SqlF l a)
 derive instance ordSqlF ∷ (Ord a, Ord (l a)) ⇒ Ord (SqlF l a)
+
+derive instance eqSqlDeclF ∷ Eq a ⇒ Eq (SqlDeclF a)
+derive instance ordSqlDeclF ∷ Ord a ⇒ Ord (SqlDeclF a)
+
+derive instance eqSqlModuleF ∷ Eq a ⇒ Eq (SqlModuleF a)
+derive instance ordSqlModuleF ∷ Ord a ⇒ Ord (SqlModuleF a)
+derive instance newtypeSqlModuleF ∷ Newtype (SqlModuleF a) _
+
+derive instance eqSqlQueryF ∷ Eq a ⇒ Eq (SqlQueryF a)
+derive instance ordSqlQueryF ∷ Ord a ⇒ Ord (SqlQueryF a)
 
 instance eq1SqlF ∷ Eq1 l ⇒ Eq1 (SqlF l) where
   eq1 (SetLiteral lst) (SetLiteral llst) = eq lst llst
@@ -160,6 +203,20 @@ instance eq1SqlF ∷ Eq1 l ⇒ Eq1 (SqlF l) where
     && r.groupBy == rr.groupBy
     && r.orderBy == rr.orderBy
   eq1 _ _ = false
+
+instance eq1SqlDeclF ∷ Eq1 SqlDeclF where
+  eq1 (Import a) (Import b) = a == b
+  eq1 (FunctionDecl r) (FunctionDecl rr) =
+    r.ident == rr.ident
+    && r.args == rr.args
+    && r.body == rr.body
+  eq1 _ _ = false
+
+instance eq1SqlQueryF ∷ Eq1 SqlQueryF where
+  eq1 (Query a c) (Query b d) = a == b && c == d
+
+instance eq1SqlModuleF ∷ Eq1 SqlModuleF where
+  eq1 (Module a) (Module b) = a == b
 
 instance ord1SqlF ∷ Ord1 l ⇒ Ord1 (SqlF l) where
   compare1 (Literal l) (Literal ll) = compare1 l ll
@@ -221,7 +278,25 @@ instance ord1SqlF ∷ Ord1 l ⇒ Ord1 (SqlF l) where
     <> compare r.orderBy rr.orderBy
     <> compare r.groupBy rr.groupBy
 
-derive instance functorSIG ∷ Functor l ⇒ Functor (SqlF l)
+instance ord1SqlDeclF ∷ Ord1 SqlDeclF where
+  compare1 (Import a) (Import b) = compare a b
+  compare1 (Import _) _ = LT
+  compare1 _ (Import _) = GT
+  compare1 (FunctionDecl r) (FunctionDecl rr) =
+    compare r.ident rr.ident
+    <> compare r.args rr.args
+    <> compare r.body rr.body
+
+instance ord1SqlQueryF ∷ Ord1 SqlQueryF where
+  compare1 (Query a c) (Query b d) = compare a b <> compare c d
+
+instance ord1SqlModuleF ∷ Ord1 SqlModuleF where
+  compare1 (Module a) (Module b) = compare a b
+
+derive instance functorSqlF ∷ Functor l ⇒ Functor (SqlF l)
+derive instance functorSqlDeclF ∷ Functor SqlDeclF
+derive instance functorSqlQueryF ∷ Functor SqlQueryF
+derive instance functorSqlModuleF ∷ Functor SqlModuleF
 
 instance foldableSqlF ∷ F.Foldable l ⇒ F.Foldable (SqlF l) where
   foldMap f = case _ of
@@ -298,7 +373,26 @@ instance foldableSqlF ∷ F.Foldable l ⇒ F.Foldable (SqlF l) where
     Parens p → f p a
     Literal l → F.foldr f a l
 
+instance foldableSqlDeclF ∷ F.Foldable SqlDeclF where
+  foldMap f = case _ of
+    FunctionDecl r → f r.body
+    Import _ → mempty
+  foldl f a = case _ of
+    FunctionDecl r → f a r.body
+    Import _ → a
+  foldr f a = case _ of
+    FunctionDecl r → f r.body a
+    Import _ → a
 
+instance foldableSqlQueryF ∷ F.Foldable SqlQueryF where
+  foldMap f (Query r s) = F.foldMap (F.foldMap f) r <> f s
+  foldl f a (Query r s) = f (F.foldl (F.foldl f) a r) s
+  foldr f a (Query r s) = F.foldr (\x a' → F.foldr f a' x) (f s a) r
+
+instance foldableSqlModuleF ∷ F.Foldable SqlModuleF where
+  foldMap f (Module r) = F.foldMap (F.foldMap f) r
+  foldl f a (Module r) = F.foldl (F.foldl f) a r
+  foldr f a (Module r) = F.foldr (\x a' → F.foldr f a' x) a r
 
 instance traversableSqlF ∷ T.Traversable l ⇒ T.Traversable (SqlF l) where
   traverse f = case _ of
@@ -338,6 +432,23 @@ instance traversableSqlF ∷ T.Traversable l ⇒ T.Traversable (SqlF l) where
       <*> T.traverse f filter
       <*> T.traverse (T.traverse f) groupBy
       <*> T.traverse (T.traverse f) orderBy
+  sequence = T.sequenceDefault
+
+instance traversableSqlDeclF ∷ T.Traversable SqlDeclF where
+  traverse f = case _ of
+    FunctionDecl { ident, args, body } →
+      map FunctionDecl
+      $ { ident, args, body: _ }
+      <$> f body
+    Import r → pure $ Import r
+  sequence = T.sequenceDefault
+
+instance traversableSqlQueryF ∷ T.Traversable SqlQueryF where
+  traverse f (Query r s) = Query <$> T.traverse (T.traverse f) r <*> f s
+  sequence = T.sequenceDefault
+
+instance traversableSqlModuleF ∷ T.Traversable SqlModuleF where
+  traverse f (Module r) = Module <$> T.traverse (T.traverse f) r
   sequence = T.sequenceDefault
 
 printSqlF ∷ ∀ l. Algebra l String → Algebra (SqlF l) String
@@ -384,6 +495,23 @@ printSqlF printLiteralF = case _ of
     <> (orderBy # F.foldMap \ob → " ORDER BY " <> OB.printOrderBy ob)
   Parens t →
     "(" <> t <> ")"
+
+printSqlDeclF ∷ Algebra SqlDeclF String
+printSqlDeclF = case _ of
+  FunctionDecl { ident, args, body } →
+    "CREATE FUNCTION "
+    <> ID.printIdent ident
+    <> "(" <> F.intercalate "," (map (":" <> _) args) <> ") BEGIN "
+    <> body
+    <> " END"
+  Import s →
+    "IMPORT " <> ID.printIdent s
+
+printSqlQueryF ∷ Algebra SqlQueryF String
+printSqlQueryF (Query decls expr) = F.intercalate "; " $ L.snoc (printSqlDeclF <$> decls) expr
+
+printSqlModuleF ∷ Algebra SqlModuleF String
+printSqlModuleF (Module decls) = F.intercalate "; " $ printSqlDeclF <$> decls
 
 encodeJsonSqlF ∷ ∀ l. Algebra l J.Json → Algebra (SqlF l) J.Json
 encodeJsonSqlF alg = case _ of
@@ -454,6 +582,31 @@ encodeJsonSqlF alg = case _ of
     J.~> "value" J.:= a
     J.~> J.jsonEmptyObject
 
+encodeJsonSqlDeclF ∷ Algebra SqlDeclF J.Json
+encodeJsonSqlDeclF = case _ of
+  FunctionDecl { ident, args, body } →
+    "tag" J.:= "create function"
+    J.~> "ident" J.:= ident
+    J.~> "args" J.:= args
+    J.~> "body" J.:= body
+    J.~> J.jsonEmptyObject
+  Import s →
+    "tag" J.:= "import"
+    J.~> "value" J.:= s
+    J.~> J.jsonEmptyObject
+
+encodeJsonSqlQueryF ∷ Algebra SqlQueryF J.Json
+encodeJsonSqlQueryF (Query decls expr) =
+  "tag" J.:= "query"
+  J.~> "decls" J.:= (encodeJsonSqlDeclF <$> decls)
+  J.~> "expr" J.:= expr
+  J.~> J.jsonEmptyObject
+
+encodeJsonSqlModuleF ∷ Algebra SqlModuleF J.Json
+encodeJsonSqlModuleF (Module decls) =
+  "tag" J.:= "module"
+  J.~> "decls" J.:= (encodeJsonSqlDeclF <$> decls)
+  J.~> J.jsonEmptyObject
 
 decodeJsonSqlF
   ∷ ∀ l
@@ -475,7 +628,7 @@ decodeJsonSqlF coalg = J.decodeJson >=> \obj → do
     "vari" → decodeVari obj
     "select" → decodeSelect obj
     "parens" → decodeParens obj
-    _ → E.Left "This is not SqlF expression"
+    _ → E.Left $ "Invalid SQL^2 expression: " <> tag
   where
   decodeSetLiteral obj = do
     v ← obj J..? "value"
@@ -544,6 +697,44 @@ decodeJsonSqlF coalg = J.decodeJson >=> \obj → do
     v ← obj J..? "value"
     pure $ Parens v
 
+decodeJsonSqlDeclF ∷ CoalgebraM (E.Either String) SqlDeclF J.Json
+decodeJsonSqlDeclF = J.decodeJson >=> \obj → do
+  tag ← obj J..? "tag"
+  case tag of
+    "create function" → decodeFunctionDecl obj
+    "import" → decodeImport obj
+    _ → E.Left $ "Invalid SQL^2 declaration: " <> tag
+
+  where
+  decodeFunctionDecl obj = do
+    ident ← obj J..? "ident"
+    args ← obj J..? "args"
+    body ← obj J..? "body"
+    pure $ FunctionDecl { ident, args, body }
+
+  decodeImport obj = do
+    v ← obj J..? "value"
+    pure $ Import v
+
+decodeJsonSqlQueryF ∷ CoalgebraM (E.Either String) SqlQueryF J.Json
+decodeJsonSqlQueryF = J.decodeJson >=> \obj → do
+  tag ← obj J..? "tag"
+  case tag of
+    "query" → do
+      decls ← T.traverse decodeJsonSqlDeclF =<< obj J..? "decls"
+      expr ← obj J..? "expr"
+      pure $ Query decls expr
+    _ → E.Left $ "Invalid top-level SQL^2 production: " <> tag
+
+decodeJsonSqlModuleF ∷ CoalgebraM (E.Either String) SqlModuleF J.Json
+decodeJsonSqlModuleF = J.decodeJson >=> \obj → do
+  tag ← obj J..? "tag"
+  case tag of
+    "module" → do
+      decls ← T.traverse decodeJsonSqlDeclF =<< obj J..? "decls"
+      pure $ Module decls
+    _ → E.Left $ "Invalid top-level SQL^2 production: " <> tag
+
 arbitrarySqlF
   ∷ ∀ l
   . CoalgebraM Gen.Gen l Int
@@ -569,6 +760,18 @@ arbitrarySqlF genLiteral n
     , genLet n
     , genSelect n
     ]
+
+arbitrarySqlDeclF ∷ CoalgebraM Gen.Gen SqlDeclF Int
+arbitrarySqlDeclF n =
+  Gen.oneOf genImport
+    [ genFunctionDecl n
+    ]
+
+arbitrarySqlQueryF ∷ CoalgebraM Gen.Gen SqlQueryF Int
+arbitrarySqlQueryF n = Query <$> genDecls n <*> pure n
+
+arbitrarySqlModuleF ∷ CoalgebraM Gen.Gen SqlModuleF Int
+arbitrarySqlModuleF n = Module <$> genDecls n
 
 genSetLiteral ∷ ∀ l. CoalgebraM Gen.Gen (SqlF l) Int
 genSetLiteral n = do
@@ -664,6 +867,20 @@ genSelect n = do
                 , orderBy
                 }
 
+genFunctionDecl ∷ CoalgebraM Gen.Gen SqlDeclF Int
+genFunctionDecl n = do
+  ident ← genIdent
+  len ← Gen.chooseInt 0 $ n - 1
+  let
+    foldFn acc _ = do
+      arg ← genIdent
+      pure $ arg L.: acc
+  args ← L.foldM foldFn L.Nil $ L.range 0 len
+  pure $ FunctionDecl { ident, args, body: n - 1 }
+
+genImport ∷ ∀ a. Gen.Gen (SqlDeclF a)
+genImport = Import <$> genIdent
+
 genIdent ∷ Gen.Gen String
 genIdent = do
   start ←
@@ -673,6 +890,14 @@ genIdent = do
   body ← map (Int.toStringAs Int.hexadecimal) SC.arbitrary
   pure $ start <> body
 
+genDecls ∷ Int → Gen.Gen (L.List (SqlDeclF Int))
+genDecls n = do
+  let
+    foldFn acc _ = do
+      cs ← arbitrarySqlDeclF $ n - 1
+      pure $ cs L.: acc
+  len ← Gen.chooseInt 0 $ n - 1
+  L.foldM foldFn L.Nil $ L.range 0 len
 
 -- This one is one gigantic TODO: generation Sql² AST that
 -- can be constructed using parsing. Since parsing is
@@ -703,7 +928,6 @@ genLetP n = do
   bindTo ← genSql n
   in_ ← genSql n
   pure $ embed $ Let { ident, bindTo, in_ }
-
 
 genQueryExprP ∷ ∀ t. Int → GenSql t
 genQueryExprP n
