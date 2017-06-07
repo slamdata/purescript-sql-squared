@@ -125,7 +125,6 @@ letExpr
 letExpr = let_ <|> queryExpr
   where
   let_ = PC.try do
-    operator ":"
     i ← ident
     operator ":="
     bindTo ← expr
