@@ -474,16 +474,16 @@ printSqlF printLiteralF = case _ of
     <> expr
     <> F.intercalate " " (map CS.printCase cases)
     <> F.foldMap (" ELSE " <> _) else_
-    <> "END"
+    <> " END"
   Switch { cases, else_ } →
     "CASE "
     <> F.intercalate " " (map CS.printCase cases)
     <> F.foldMap (" ELSE " <> _) else_
-    <> "END"
+    <> " END"
   Let { ident, bindTo, in_ } →
     ID.printIdent ident <> " := " <> bindTo <> "; " <> in_
   Vari s →
-    ":" <> s
+    ":" <> ID.printIdent s
   Select { isDistinct, projections, relations, filter, groupBy, orderBy } →
     "SELECT "
     <> (if isDistinct then "DISTINCT " else "")

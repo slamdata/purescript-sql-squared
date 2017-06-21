@@ -28,7 +28,7 @@ instance traversableCase ∷ T.Traversable Case where
   sequence = T.sequenceDefault
 
 printCase ∷ Algebra Case String
-printCase (Case { cond, expr }) = " WHEN " <> cond <> " THEN " <> expr
+printCase (Case { cond, expr }) = "WHEN " <> cond <> " THEN " <> expr
 
 encodeJsonCase ∷ Algebra Case J.Json
 encodeJsonCase (Case { cond, expr }) =
