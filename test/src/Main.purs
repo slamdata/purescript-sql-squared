@@ -29,6 +29,6 @@ main = do
   runTest do
     Constructors.testSuite
     Argonaut.testSuite
-  Parse.testSuite
+    Parse.testSuite
 
   Gen.test

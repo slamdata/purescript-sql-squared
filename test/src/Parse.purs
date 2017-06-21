@@ -2,27 +2,19 @@ module Test.Parse where
 
 import Prelude
 
-import Control.Monad.Eff (Eff)
-
 import Data.Either as E
 import Data.Foldable as F
-import SqlSquared (printQuery, parseQuery)
+import SqlSquared (parseQuery, SqlQuery)
 
+import Test.Unit (suite, test, TestSuite)
+import Test.Unit.Assert as Assert
 import Test.Unit.Console as Console
 
-import Debug.Trace as DT
-
-testPrintParse ∷ ∀ e. String → Eff (testOutput ∷ Console.TESTOUTPUT|e) Unit
-testPrintParse s = do
-  Console.printLabel $ "Testing: \n" <> s <> "\n"
-  let parsed = parseQuery s
-  case parsed of
-    E.Left e → Console.printFail $ "Fail: " <> show e <> "\n"
-    E.Right sql → do
-      Console.printPass "Success: \n"
-      DT.traceAnyA sql
-      Console.printPass $ printQuery sql
-      Console.printPass "\n"
+testPrintParse ∷ ∀ e. String → TestSuite (testOutput ∷ Console.TESTOUTPUT | e)
+testPrintParse s =
+  test s case parseQuery s of
+    E.Left err → Assert.assert (show err) false
+    E.Right (sql ∷ SqlQuery) → pure unit
 
 inputs ∷ Array String
 inputs =
@@ -34,11 +26,11 @@ inputs =
   , """select date("12-12-12") from `/fo` cross join `/bar`"""
   , """Select foo as bar from `/test/db/collection`"""
   , """Select `foo`, `bar`[*] from `/test` join `/test2` on baz where doo = (12 + 23)"""
-  , """:foo := 12; select * from `/test` group by baz"""
+  , """foo := 12; select * from `/test` group by baz"""
   , """select 1"""
   , """select (1, 2)"""
-  , """:foo := [1, 2]; select 1"""
-  , """:foo := 1; :bar := 2; select [] """
+  , """foo := [1, 2]; select 1"""
+  , """foo := 1; bar := 2; select [] """
   , """select foo from `/bar` order by zoo desc"""
   , """select distinct a from `/f`"""
   , """select a from /* trololo */ `/db`"""
@@ -49,8 +41,7 @@ select 12
   , """create function foo(:bar) begin :bar + 2 end; select * from `/test` where foo = foo(42)"""
   ]
 
-
-testSuite ∷ ∀ e. Eff (testOutput ∷ Console.TESTOUTPUT|e) Unit
+testSuite ∷ ∀ e. TestSuite (testOutput ∷ Console.TESTOUTPUT | e)
 testSuite = do
-  Console.printLabel "\n\n:::::::::: TESTING PARSER ::::::::::\n\n"
-  F.for_ inputs testPrintParse
+  suite "parsers" do
+    F.traverse_ testPrintParse inputs
