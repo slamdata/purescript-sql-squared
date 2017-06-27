@@ -107,6 +107,11 @@ keyword s = PC.try $ token >>= case _ of
   Kw ss | S.toLower s == S.toLower ss → pure s
   _ → P.fail $ "Token is not a keyword " <> s
 
+anyKeyword ∷ ∀ m. Monad m ⇒ P.ParserT (Array Token) m String
+anyKeyword = PC.try $ token >>= case _ of
+  Kw s → pure s
+  _ → P.fail "Token is not a keyword"
+
 match ∷ ∀ m. Monad m ⇒ Token → P.ParserT (Array Token) m Token
 match = whenTok ∘ eq
 
@@ -467,7 +472,7 @@ variable
   ⇒ P.ParserT (Array Token) m t
 variable = PC.try do
   operator ":"
-  s ← ident
+  s ← ident <|> anyKeyword
   pure $ embed $ Sig.Vari s
 
 literal
