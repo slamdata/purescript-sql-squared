@@ -39,6 +39,7 @@ select 12
 """
   , """import foo; select * from `/test`"""
   , """create function foo(:bar) begin :bar + 2 end; select * from `/test` where foo = foo(42)"""
+  , """select :where"""
   ]
 
 testSuite ∷ ∀ e. TestSuite (testOutput ∷ Console.TESTOUTPUT | e)
