@@ -3,15 +3,14 @@ module SqlSquared.Constructors where
 import Prelude
 
 import Data.Array as Arr
-import Data.Json.Extended.Signature (EJsonF(..), EJsonMap(..))
 import Data.Foldable as F
+import Data.HugeInt as HI
 import Data.HugeNum as HN
+import Data.Json.Extended.Signature (EJsonF(..), EJsonMap(..))
 import Data.List as L
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
-
 import Matryoshka (class Corecursive, embed)
-
 import SqlSquared.Signature as Sig
 import SqlSquared.Utils ((∘))
 
@@ -25,7 +24,7 @@ null ∷ ∀ t. Corecursive t (Sig.SqlF EJsonF) ⇒ t
 null = embed $ Sig.Literal Null
 
 int ∷ ∀ t. Corecursive t (Sig.SqlF EJsonF) ⇒ Int → t
-int = embed ∘ Sig.Literal ∘ Integer
+int = embed ∘ Sig.Literal ∘ Integer ∘ HI.fromInt
 
 num ∷ ∀ t. Corecursive t (Sig.SqlF EJsonF) ⇒ Number → t
 num = embed ∘ Sig.Literal ∘ Decimal ∘ HN.fromNumber

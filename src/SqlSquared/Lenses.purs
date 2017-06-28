@@ -2,6 +2,7 @@ module SqlSquared.Lenses where
 
 import Prelude
 
+import Data.HugeInt as HI
 import Data.HugeNum as HN
 import Data.Json.Extended as EJ
 import Data.Lens (Prism', prism', Lens', lens, Iso')
@@ -241,7 +242,7 @@ _IntLiteral
   ∷ ∀ t
   . Recursive t (S.SqlF EJ.EJsonF)
   ⇒ Corecursive t (S.SqlF EJ.EJsonF)
-  ⇒ Prism' t Int
+  ⇒ Prism' t HI.HugeInt
 _IntLiteral = prism' (embed ∘ S.Literal ∘ EJ.Integer) $ project ⋙ case _ of
   S.Literal (EJ.Integer r)  → M.Just r
   _ → M.Nothing

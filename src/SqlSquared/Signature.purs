@@ -43,38 +43,38 @@ module SqlSquared.Signature
 
 import Prelude
 
+import Control.Monad.Gen as MGen
 import Data.Argonaut as J
 import Data.Array as A
 import Data.Either as E
 import Data.Eq (class Eq1, eq1)
 import Data.Foldable as F
-import Data.Json.Extended as EJ
-import Data.Int as Int
-import Data.List as L
-import Data.List ((:))
+import Data.HugeInt as HI
 import Data.HugeNum as HN
+import Data.Int as Int
+import Data.Json.Extended as EJ
+import Data.List ((:))
+import Data.List as L
 import Data.Maybe (Maybe(..))
 import Data.Monoid (mempty)
 import Data.Newtype (class Newtype)
+import Data.NonEmpty ((:|))
 import Data.Ord (class Ord1, compare1)
 import Data.String as S
+import Data.String.Gen as GenS
 import Data.Traversable as T
-
 import Matryoshka (Algebra, CoalgebraM, class Corecursive, embed)
-
-import SqlSquared.Utils (type (×), (×), (∘), (⋙))
-
 import SqlSquared.Signature.BinaryOperator as BO
 import SqlSquared.Signature.Case as CS
 import SqlSquared.Signature.GroupBy as GB
+import SqlSquared.Signature.Ident as ID
 import SqlSquared.Signature.JoinType as JT
 import SqlSquared.Signature.OrderBy as OB
 import SqlSquared.Signature.OrderType as OT
 import SqlSquared.Signature.Projection as PR
 import SqlSquared.Signature.Relation as RL
 import SqlSquared.Signature.UnaryOperator as UO
-import SqlSquared.Signature.Ident as ID
-
+import SqlSquared.Utils (type (×), (×), (∘), (⋙))
 import Test.StrongCheck.Arbitrary as SC
 import Test.StrongCheck.Gen as Gen
 
@@ -915,11 +915,11 @@ genSql n
 genLeaf ∷ ∀ t. GenSql t
 genLeaf =
   map (embed ∘ Literal)
-  $ Gen.oneOf (pure $ EJ.Null)
-    [ map EJ.Boolean SC.arbitrary
-    , map EJ.Integer SC.arbitrary
-    , map EJ.Decimal $ map HN.fromNumber SC.arbitrary
-    , map EJ.String SC.arbitrary
+  $ MGen.oneOf $ pure EJ.Null :|
+    [ EJ.Boolean <$> MGen.chooseBool
+    , EJ.Integer <<< HI.fromInt <$> MGen.chooseInt (-1000000) 1000000
+    , EJ.Decimal <<< HN.fromNumber <$> MGen.chooseFloat (-1000000.0) 1000000.0
+    , EJ.String <$> GenS.genUnicodeString
     ]
 
 genLetP ∷ ∀ t. Int → GenSql t
