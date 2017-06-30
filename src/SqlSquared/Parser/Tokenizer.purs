@@ -7,26 +7,23 @@ module SqlSquared.Parser.Tokenizer
 import Prelude
 
 import Control.Alt ((<|>))
-
 import Data.Array as A
-import Data.Int as Int
-import Data.Either (Either)
-import Data.Maybe (Maybe(..), isJust)
-import Data.Foldable as F
-import Data.HugeNum as HN
 import Data.Char as Ch
+import Data.Either (Either)
+import Data.HugeInt as HI
+import Data.HugeNum as HN
+import Data.Json.Extended.Signature.Parse as EJP
+import Data.Maybe (isJust)
 import Data.String as S
-
 import SqlSquared.Utils ((∘))
-
 import Text.Parsing.Parser as P
 import Text.Parsing.Parser.Combinators as PC
-import Text.Parsing.Parser.Token as PT
 import Text.Parsing.Parser.String as PS
+import Text.Parsing.Parser.Token as PT
 
 data Literal
   = String String
-  | Integer Int
+  | Integer HI.HugeInt
   | Decimal HN.HugeNum
 
 derive instance eqTokenLit ∷ Eq Literal
@@ -202,121 +199,13 @@ notQuotedIdent = do
     else pure str
 
 stringLit ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
-stringLit =
-  map (Lit ∘ String)
-  $ PC.between (PS.string "\"") (PS.string "\"")
-  $ map S.fromCharArray
-  $ A.many stringChar
-  where
-  stringChar = PC.try stringEscape <|> stringLetter
-  stringLetter = PS.satisfy (not ∘ eq '"')
-  stringEscape = PS.string "\\\"" $> '"'
+stringLit = Lit ∘ String <$> EJP.parseStringLiteral
 
 numLit ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
-numLit = map (Lit ∘ Decimal) parseDecimal
+numLit = Lit ∘ Decimal <$> EJP.parseDecimalLiteral
 
 intLit ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
-intLit = map (Lit ∘ Integer) parseIntLiteral
-
-parseIntLiteral ∷ ∀ m. Monad m ⇒ P.ParserT String m Int
-parseIntLiteral = parseSigned parseNat
-
-parseDecimal ∷ ∀ m. Monad m ⇒ P.ParserT String m HN.HugeNum
-parseDecimal = parseHugeNum <|> parseScientific
-
-parseHugeNum ∷ ∀ m. Monad m ⇒ P.ParserT String m HN.HugeNum
-parseHugeNum = do
-  chars ←
-    map S.fromCharArray
-    $ A.many
-    $ PS.oneOf
-    $ digits
-    <> [ '-', '.' ]
-  case HN.fromString chars of
-    Just num → pure num
-    Nothing → P.fail $ "Failed to parse decimal: " <> chars
-
-parseDigit ∷ ∀ m. Monad m ⇒ P.ParserT String m Int
-parseDigit =
-  PC.choice
-    [ 0 <$ PS.string "0"
-    , 1 <$ PS.string "1"
-    , 2 <$ PS.string "2"
-    , 3 <$ PS.string "3"
-    , 4 <$ PS.string "4"
-    , 5 <$ PS.string "5"
-    , 6 <$ PS.string "6"
-    , 7 <$ PS.string "7"
-    , 8 <$ PS.string "8"
-    , 9 <$ PS.string "9"
-    ]
-
-parseScientific ∷ ∀ m. Monad m ⇒ P.ParserT String m HN.HugeNum
-parseScientific =
-  parseSigned parsePositiveScientific
-
-parseNat
-  ∷ ∀ m
-  . Monad m
-  ⇒ P.ParserT String m Int
-parseNat =
-  A.some parseDigit
-    <#> F.foldl (\a i → a * 10 + i) 0
-
-parseNegative
-  ∷ ∀ m a
-  . Monad m
-  ⇒ Ring a
-  ⇒ P.ParserT String m a
-  → P.ParserT String m a
-parseNegative p =
-  PS.string "-"
-    *> PS.skipSpaces
-    *> p
-    <#> negate
-
-parsePositive
-  ∷ ∀ m a
-  . Monad m
-  ⇒ Ring a
-  ⇒ P.ParserT String m a
-  → P.ParserT String m a
-parsePositive p =
-  PC.optional (PS.string "+" *> PS.skipSpaces)
-    *> p
-
-parseSigned
-  ∷ ∀ m a
-  . Monad m
-  ⇒ Ring a
-  ⇒ P.ParserT String m a
-  → P.ParserT String m a
-parseSigned p = parseNegative p  <|> parsePositive p
-
-parseExponent
-  ∷ ∀ m
-  . Monad m
-  ⇒ P.ParserT String m Int
-parseExponent =
-  (PS.string "e" <|> PS.string "E")
-    *> parseIntLiteral
-
-parsePositiveScientific ∷ ∀ m. Monad m ⇒ P.ParserT String m HN.HugeNum
-parsePositiveScientific = do
-  let ten = HN.fromNumber 10.0
-  lhs ← PC.try $ fromInt <$> parseNat <* PS.string "."
-  rhs ← A.many parseDigit <#> F.foldr (\d f → divNum (f + fromInt d) ten) zero
-  exp ← parseExponent
-  pure $ (lhs + rhs) * HN.pow ten exp
-
-  where
-  fromInt = HN.fromNumber <<< Int.toNumber
-
-  -- TODO: remove when HugeNum adds division
-  divNum a b =
-    HN.fromNumber $
-    HN.toNumber a / HN.toNumber b
-
+intLit = Lit ∘ Integer <$> EJP.parseHugeIntLiteral
 
 keyword ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
 keyword = map Kw $ PC.choice $ map (PC.try ∘ parseKeyWord) keywords
@@ -328,7 +217,6 @@ parseKeyWord s =
   foldFn acc ch = do
     c ← PC.try $ PS.oneOf [ Ch.toUpper ch, Ch.toLower ch ]
     pure $ A.snoc acc c
-
 
 tokens ∷ ∀ m. Monad m ⇒ P.ParserT String m (Array Token)
 tokens = do

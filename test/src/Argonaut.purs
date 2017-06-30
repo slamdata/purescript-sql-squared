@@ -8,29 +8,26 @@ import Data.Argonaut (JCursor(..), jsonParser)
 import Data.Argonaut as JS
 import Data.Either (fromRight)
 import Data.Foldable as F
+import Data.HugeInt as HI
+import Data.Json.Extended.Signature (EJsonF(..))
 import Data.List ((:))
 import Data.List as L
 import Data.Maybe (Maybe(..))
 import Data.Set as Set
 import Data.Tuple (Tuple, fst)
-import Data.Json.Extended.Signature (EJsonF(..))
-
+import Matryoshka (ana, elgotPara, Coalgebra, ElgotAlgebra)
+import Partial.Unsafe (unsafePartial)
 import SqlSquared as S
 import SqlSquared.Utils ((×), (∘), (⋙))
-
-import Matryoshka (ana, elgotPara, Coalgebra, ElgotAlgebra)
-
 import Test.Unit (suite, test, TestSuite)
 import Test.Unit.Assert as Assert
-
-import Partial.Unsafe (unsafePartial)
 
 data UnfoldableJC = JC JCursor | S String | I Int
 
 jcCoalgebra ∷ Coalgebra (S.SqlF EJsonF) UnfoldableJC
 jcCoalgebra = case _ of
   S s → S.Ident s
-  I i → S.Literal (Integer  i)
+  I i → S.Literal (Integer (HI.fromInt i))
   JC cursor → case cursor of
     JCursorTop → S.Splice Nothing
     JIndex i c → S.Binop { op: S.IndexDeref, lhs: JC c, rhs: I i }

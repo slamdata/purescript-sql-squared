@@ -15,13 +15,14 @@
     "package.json"
   ],
   "dependencies": {
-    "purescript-prelude": "^3.0.0",
+    "purescript-prelude": "^3.1.0",
     "purescript-matryoshka": "^0.3.0",
     "purescript-pathy": "^4.0.0",
-    "purescript-profunctor": "^3.0.0",
+    "purescript-profunctor": "^3.2.0",
     "purescript-profunctor-lenses": "^3.2.0",
-    "purescript-ejson": "^9.0.0",
-    "purescript-argonaut-codecs": "^3.0.1"
+    "purescript-ejson": "^10.0.0",
+    "purescript-argonaut-codecs": "^3.1.0",
+    "purescript-strongcheck": "^3.1.0"
   },
   "devDependencies": {
     "purescript-argonaut": "^3.0.0",
