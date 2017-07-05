@@ -12,5 +12,5 @@ printIdent str =
     then str
     else "`" <> Regex.replace tick "\\`" str <> "`"
   where
-  identifier = Regex.unsafeRegex "^[_a-z][_a-z0-9]*$" Regex.ignoreCase
+  identifier = Regex.unsafeRegex "^[a-z][_a-z0-9]*$" Regex.ignoreCase
   tick = Regex.unsafeRegex "`" Regex.global
