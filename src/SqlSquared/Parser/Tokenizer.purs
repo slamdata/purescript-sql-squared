@@ -190,7 +190,7 @@ quotedIdent =
 
 notQuotedIdent ∷ ∀ m. Monad m ⇒ P.ParserT String m String
 notQuotedIdent = do
-  first ← PT.letter <|> PS.char '_'
+  first ← PT.letter
   other ← A.many (PT.alphaNum <|> PS.char '_')
   let
     str = S.fromCharArray $ A.cons first other
