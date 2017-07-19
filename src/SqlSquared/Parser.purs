@@ -424,7 +424,7 @@ unaryOperator = PC.try do
     (operator "-" $> Sig.Negative)
     <|> (operator "+" $> Sig.Positive)
     <|> (keyword "distinct" $> Sig.Distinct)
-    <|> (keyword "not" $> Sig.Distinct)
+    <|> (keyword "not" $> Sig.Not)
     <|> (keyword "exists" $> Sig.Distinct)
   e ← primaryExpression
   pure $ embed $ Sig.Unop { op, expr: e}
@@ -532,7 +532,7 @@ negatableSuffix = PC.try do
     _ ← keyword "is"
     n ← PC.optionMaybe $ keyword "not"
     pure $ isNothing  n
-  let inv = fromMaybe true mbInv
+  let inv = fromMaybe false mbInv
   suffix ← betweenSuffix <|> inSuffix <|> likeSuffix
   pure \e → (if inv then _NOT else id) $ suffix e
 
