@@ -501,7 +501,7 @@ printSqlDeclF = case _ of
   FunctionDecl { ident, args, body } →
     "CREATE FUNCTION "
     <> ID.printIdent ident
-    <> "(" <> F.intercalate "," (map (":" <> _) args) <> ") BEGIN "
+    <> "(" <> F.intercalate ", " (map (":" <> _) args) <> ") BEGIN "
     <> body
     <> " END"
   Import s →
