@@ -425,7 +425,7 @@ unaryOperator = PC.try do
     <|> (operator "+" $> Sig.Positive)
     <|> (keyword "distinct" $> Sig.Distinct)
     <|> (keyword "not" $> Sig.Not)
-    <|> (keyword "exists" $> Sig.Distinct)
+    <|> (keyword "exists" $> Sig.Exists)
   e ← primaryExpression
   pure $ embed $ Sig.Unop { op, expr: e}
 
