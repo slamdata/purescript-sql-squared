@@ -47,6 +47,7 @@ select 12
   , E.Right """select :where"""
   , E.Right """foo.`_id`"""
   , E.Left  """foo._id"""
+  , E.Right """select * from foo INNER JOIN bar on baz"""
   ]
 
 testSuite ∷ ∀ e. TestSuite (testOutput ∷ Console.TESTOUTPUT | e)

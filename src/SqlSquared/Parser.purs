@@ -722,12 +722,12 @@ stdJoinRelation = PC.try do
     (Sig.RightJoin
      <$ keyword "right")
      <|>
+    (Sig.InnerJoin
+     <$ keyword "inner")
+     <|>
     (Sig.FullJoin
      <$ (PC.optional $ keyword "full")
      <* (PC.optional $ keyword "outer"))
-    <|>
-    (Sig.InnerJoin
-     <$ keyword "inner")
   _ ← keyword "join"
   right ← simpleRelation
   _ ← keyword "on"
