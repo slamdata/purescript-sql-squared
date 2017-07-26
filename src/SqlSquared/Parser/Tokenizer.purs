@@ -2,11 +2,15 @@ module SqlSquared.Parser.Tokenizer
   ( tokenize
   , Token(..)
   , Literal(..)
+  , PositionedToken
+  , TokenStream
+  , printToken
   ) where
 
 import Prelude
 
 import Control.Alt ((<|>))
+import Control.Monad.State (get)
 import Data.Array as A
 import Data.Char as Ch
 import Data.Either (Either)
@@ -17,6 +21,7 @@ import Data.Maybe (isJust)
 import Data.String as S
 import SqlSquared.Utils ((∘))
 import Text.Parsing.Parser as P
+import Text.Parsing.Parser.Pos as PP
 import Text.Parsing.Parser.Combinators as PC
 import Text.Parsing.Parser.String as PS
 import Text.Parsing.Parser.Token as PT
@@ -35,6 +40,15 @@ data Token
   | Lit Literal
   | Comment String
 
+derive instance eqToken ∷ Eq Token
+
+type PositionedToken =
+  { position ∷ PP.Position
+  , token ∷ Token
+  }
+
+type TokenStream = Array PositionedToken
+
 isKeyword ∷ Token → Boolean
 isKeyword = case _ of
   Kw _ → true
@@ -45,53 +59,63 @@ isComment = case _ of
   Comment _ → true
   _ → false
 
-derive instance eqToken ∷ Eq Token
-
+printToken ∷ Token → String
+printToken = case _ of
+  Kw str → "keyword `" <> S.toUpper str <> "`"
+  Op str → "`" <> str <> "`"
+  Identifier _ → "identifier"
+  Lit (String _) → "string literal"
+  Lit (Integer _) → "integer literal"
+  Lit (Decimal _) → "decimal literal"
+  Comment str → "comment"
 
 op ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
-op = map Op $ PC.choice
-  [ PC.try $ PS.string "{*:}"
-  , PC.try $ PS.string "{*}"
-  , PC.try $ PS.string "{:*}"
-  , PC.try $ PS.string "{_:}"
-  , PC.try $ PS.string "{_}"
-  , PC.try $ PS.string "[*:]"
-  , PC.try $ PS.string "[*]"
-  , PC.try $ PS.string "[:*]"
-  , PC.try $ PS.string "[_]"
-  , PC.try $ PS.string "..."
-  , PC.try $ PS.string ".."
-  , PC.try $ PS.string "<>"
-  , PC.try $ PS.string "!="
-  , PC.try $ PS.string "||"
-  , PC.try $ PS.string "??"
-  , PC.try $ PS.string "!~*"
-  , PC.try $ PS.string "!~"
-  , PC.try $ PS.string "!~~"
-  , PC.try $ PS.string "~~"
-  , PC.try $ PS.string "~*"
-  , PC.try $ PS.string ":="
-  , PS.string "~"
-  , PS.string "??"
-  , PS.string "="
-  , PS.string ">"
-  , PS.string "<"
-  , PS.string "["
-  , PS.string "]"
-  , PS.string ":"
-  , PS.string ","
-  , PS.string ";"
-  , PS.string "*"
-  , PS.string "("
-  , PS.string ")"
-  , PS.string "{"
-  , PS.string "}"
-  , PS.string "-"
-  , PS.string "+"
-  , PS.string "^"
-  , PS.string "."
-  , PS.string "/"
-  , PS.string "%"
+op = map Op $ PC.choice $ map PS.string operators
+
+operators ∷ Array String
+operators =
+  [ "{*:}"
+  , "{*}"
+  , "{:*}"
+  , "{_:}"
+  , "{_}"
+  , "[*:]"
+  , "[*]"
+  , "[:*]"
+  , "[_]"
+  , "..."
+  , ".."
+  , "<>"
+  , "!="
+  , "||"
+  , "??"
+  , "!~*"
+  , "!~"
+  , "!~~"
+  , "~~"
+  , "~*"
+  , ":="
+  , "~"
+  , "??"
+  , "="
+  , ">"
+  , "<"
+  , "["
+  , "]"
+  , ":"
+  , ","
+  , ";"
+  , "*"
+  , "("
+  , ")"
+  , "{"
+  , "}"
+  , "-"
+  , "+"
+  , "^"
+  , "."
+  , "/"
+  , "%"
   ]
 
 keywords ∷ Array String
@@ -181,10 +205,10 @@ multiLineComment = do
 quotedIdent ∷ ∀ m. Monad m ⇒ P.ParserT String m String
 quotedIdent =
   PC.between (PS.string "`") (PS.string "`")
-  $ map S.fromCharArray
-  $ A.some identChar
+    $ map S.fromCharArray
+    $ A.some identChar
   where
-  identChar = PC.try identEscape <|> identLetter
+  identChar = identEscape <|> identLetter
   identLetter = PS.satisfy (not ∘ eq '`')
   identEscape = PS.string "\\`" $> '`'
 
@@ -208,20 +232,25 @@ intLit ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
 intLit = Lit ∘ Integer <$> EJP.parseHugeIntLiteral
 
 keyword ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
-keyword = map Kw $ PC.choice $ map (PC.try ∘ parseKeyWord) keywords
+keyword = map Kw $ PC.choice $ map (PC.try ∘ parseKeyword) keywords
 
-parseKeyWord ∷ ∀ m. Monad m ⇒ String → P.ParserT String m String
-parseKeyWord s =
+parseKeyword ∷ ∀ m. Monad m ⇒ String → P.ParserT String m String
+parseKeyword s =
   map S.fromCharArray $ A.foldM foldFn [ ] $ S.toCharArray s
   where
   foldFn acc ch = do
     c ← PC.try $ PS.oneOf [ Ch.toUpper ch, Ch.toLower ch ]
     pure $ A.snoc acc c
 
-tokens ∷ ∀ m. Monad m ⇒ P.ParserT String m (Array Token)
+positioned ∷ ∀ m. Monad m ⇒ P.ParserT String m Token → P.ParserT String m PositionedToken
+positioned m = do
+  P.ParseState _ position _ ← get
+  { position, token: _ } <$> m
+
+tokens ∷ ∀ m. Monad m ⇒ P.ParserT String m TokenStream
 tokens = do
   PS.skipSpaces
-  A.some $ PC.choice
+  A.some $ positioned $ PC.choice
     [ skipped oneLineComment
     , skipped multiLineComment
     , skipped op
@@ -234,6 +263,6 @@ tokens = do
   where
   skipped r = PC.try (r <* PS.skipSpaces)
 
-tokenize ∷ String → Either P.ParseError (Array Token)
+tokenize ∷ String → Either P.ParseError TokenStream
 tokenize input =
-  A.filter (not ∘ isComment) <$>  P.runParser input tokens
+  A.filter (not ∘ isComment ∘ _.token) <$>  P.runParser input tokens
