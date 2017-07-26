@@ -717,17 +717,22 @@ stdJoinRelation
 stdJoinRelation = PC.try do
   joinType ←
     (Sig.LeftJoin
-     <$ keyword "left")
+     <$ keyword "left"
+     <* (PC.optional $ keyword "outer"))
      <|>
     (Sig.RightJoin
-     <$ keyword "right")
+     <$ keyword "right"
+     <* (PC.optional $ keyword "outer"))
      <|>
-    (Sig.InnerJoin
-     <$ keyword "inner")
+    (PC.try $ Sig.FullJoin
+     <$ (PC.optional $ keyword "full")
+     <* keyword "outer")
      <|>
     (Sig.FullJoin
-     <$ (PC.optional $ keyword "full")
-     <* (PC.optional $ keyword "outer"))
+     <$ keyword "full")
+     <|>
+    (Sig.InnerJoin
+     <$ (PC.optional $ keyword "inner"))
   _ ← keyword "join"
   right ← simpleRelation
   _ ← keyword "on"
