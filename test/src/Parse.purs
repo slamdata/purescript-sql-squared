@@ -47,6 +47,14 @@ select 12
   , E.Right """select :where"""
   , E.Right """foo.`_id`"""
   , E.Left  """foo._id"""
+  , E.Right """select * from foo JOIN bar on baz"""
+  , E.Right """select * from foo FULL JOIN bar on baz"""
+  , E.Right """select * from foo FULL OUTER JOIN bar on baz"""
+  , E.Right """select * from foo INNER JOIN bar on baz"""
+  , E.Right """select * from foo LEFT OUTER JOIN bar on baz"""
+  , E.Right """select * from foo LEFT JOIN bar on baz"""
+  , E.Right """select * from foo RIGHT OUTER JOIN bar on baz"""
+  , E.Right """select * from foo RIGHT JOIN bar on baz"""
   ]
 
 testSuite ∷ ∀ e. TestSuite (testOutput ∷ Console.TESTOUTPUT | e)
