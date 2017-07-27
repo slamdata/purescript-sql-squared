@@ -12,12 +12,11 @@ import Prelude
 import Control.Alt ((<|>))
 import Control.Monad.State (get)
 import Data.Array as A
-import Data.Char as Ch
 import Data.Either (Either)
 import Data.HugeInt as HI
 import Data.HugeNum as HN
 import Data.Json.Extended.Signature.Parse as EJP
-import Data.Maybe (isJust)
+import Data.Set as Set
 import Data.String as S
 import SqlSquared.Utils ((∘))
 import Text.Parsing.Parser as P
@@ -118,8 +117,8 @@ operators =
   , "%"
   ]
 
-keywords ∷ Array String
-keywords =
+keywords ∷ Set.Set String
+keywords = Set.fromFoldable
   [ "where"
   , "when"
   , "values"
@@ -176,8 +175,8 @@ keywords =
 digits ∷ Array Char
 digits = ['0','1','2','3','4','5','6','7','8','9' ]
 
-ident ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
-ident = map Identifier $ PC.try quotedIdent <|> PC.try notQuotedIdent
+identOrKeyword ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
+identOrKeyword = PC.try quotedIdent <|> notQuotedIdentOrKeyword
 
 oneLineComment ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
 oneLineComment =
@@ -202,9 +201,10 @@ multiLineComment = do
         _ →
           collectBeforeComment $ acc <> S.fromCharArray [ c ]
 
-quotedIdent ∷ ∀ m. Monad m ⇒ P.ParserT String m String
+quotedIdent ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
 quotedIdent =
-  PC.between (PS.string "`") (PS.string "`")
+  map Identifier
+    $ PC.between (PS.string "`") (PS.string "`")
     $ map S.fromCharArray
     $ A.some identChar
   where
@@ -212,15 +212,16 @@ quotedIdent =
   identLetter = PS.satisfy (not ∘ eq '`')
   identEscape = PS.string "\\`" $> '`'
 
-notQuotedIdent ∷ ∀ m. Monad m ⇒ P.ParserT String m String
-notQuotedIdent = do
+notQuotedIdentOrKeyword ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
+notQuotedIdentOrKeyword = do
   first ← PT.letter
   other ← A.many (PT.alphaNum <|> PS.char '_')
   let
     str = S.fromCharArray $ A.cons first other
-  if isJust $ A.elemIndex (S.toLower str) keywords
-    then P.fail "unexpected keyword"
-    else pure str
+    low = S.toLower str
+  pure if Set.member low keywords
+    then Kw low
+    else Identifier str
 
 stringLit ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
 stringLit = Lit ∘ String <$> EJP.parseStringLiteral
@@ -230,17 +231,6 @@ numLit = Lit ∘ Decimal <$> EJP.parseDecimalLiteral
 
 intLit ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
 intLit = Lit ∘ Integer <$> EJP.parseHugeIntLiteral
-
-keyword ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
-keyword = map Kw $ PC.choice $ map (PC.try ∘ parseKeyword) keywords
-
-parseKeyword ∷ ∀ m. Monad m ⇒ String → P.ParserT String m String
-parseKeyword s =
-  map S.fromCharArray $ A.foldM foldFn [ ] $ S.toCharArray s
-  where
-  foldFn acc ch = do
-    c ← PC.try $ PS.oneOf [ Ch.toUpper ch, Ch.toLower ch ]
-    pure $ A.snoc acc c
 
 positioned ∷ ∀ m. Monad m ⇒ P.ParserT String m Token → P.ParserT String m PositionedToken
 positioned m = do
@@ -254,8 +244,7 @@ tokens = do
     [ skipped oneLineComment
     , skipped multiLineComment
     , skipped op
-    , skipped keyword
-    , skipped ident
+    , skipped identOrKeyword
     , skipped numLit
     , skipped intLit
     , skipped stringLit
