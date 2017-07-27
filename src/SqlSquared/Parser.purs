@@ -2,6 +2,7 @@ module SqlSquared.Parser
   ( parse
   , parseQuery
   , parseModule
+  , prettyParse
   , module SqlSquared.Parser.Tokenizer
   ) where
 
@@ -14,12 +15,13 @@ import Control.Monad.State (get, put)
 import Control.MonadZero (guard)
 
 import Data.Array as A
-import Data.NonEmpty ((:|))
+import Data.Bifunctor (lmap)
 import Data.Either as E
+import Data.Foldable as F
 import Data.List ((:))
 import Data.List as L
-import Data.Foldable as F
-import Data.Maybe (Maybe(..), isNothing, fromMaybe, isJust, maybe)
+import Data.Maybe (Maybe(..), fromMaybe, isJust, maybe)
+import Data.NonEmpty ((:|))
 import Data.Json.Extended as EJ
 import Data.Tuple (Tuple(..), uncurry)
 import Data.Path.Pathy as Pt
@@ -55,14 +57,38 @@ asErrorMessage ∷ ∀ m a. Monad m ⇒ String → P.ParserT TokenStream m a →
 asErrorMessage err = flip (<|>) do
   P.ParseState input _ _ ← get
   case A.head input of
-    Nothing → P.fail $ "Expected " <> err <> ", got end of input"
-    Just tk → P.failWithPosition ("Expected " <> err <> ", got " <> printToken tk.token) tk.position
+    Nothing → P.fail $ "Expected " <> err <> ", but got end of input"
+    Just tk → P.failWithPosition ("Expected " <> err <> ", but got " <> printToken tk.token) tk.position
 
 withToken ∷ ∀ m a. Monad m ⇒ String → (Token → P.ParserT TokenStream m a) → P.ParserT TokenStream m a
 withToken err k =
   PC.try
-    $ withErrorMessage (append $ err <> ", got ")
+    $ withErrorMessage (append $ err <> ", but got ")
     ((withErrorMessage' (const "end of input") token) >>= k)
+
+prettyParse
+  ∷ ∀ a
+  . (String → E.Either P.ParseError a)
+  → String
+  → E.Either String a
+prettyParse parser input =
+  lmap printError (parser input)
+  where
+  padLeft n s =
+    S.fromCharArray (A.replicate (n - S.length s) ' ') <> s
+
+  printError parseError =
+    let
+      message = P.parseErrorMessage parseError
+      PP.Position pos = P.parseErrorPosition parseError
+      lines = S.split (S.Pattern "\n") input
+      pre = A.drop (pos.line - 3) $ A.take (pos.line - 1) lines
+      line = A.take 1 $ A.drop (pos.line - 1) lines
+      post = A.take 3 $ A.drop pos.line lines
+      nums = A.mapWithIndex (\n l → padLeft 4 (show (n + pos.line - (A.length pre))) <> " | " <> l) (pre <> line <> post)
+      pointer = pure $ S.fromCharArray (A.replicate (pos.column - 1 + 7) '-') <> "^ " <> message
+    in
+      S.joinWith "\n" $ A.take 3 nums <> pointer <> A.drop 3 nums
 
 parse
   ∷ ∀ t
@@ -434,12 +460,12 @@ keyValuePair = do
 
 negatableSuffix ∷ ∀ m t. SqlParser m t (t → t)
 negatableSuffix = do
-  mbInv ← PC.optionMaybe do
-    _ ← keyword "is"
+  inv ← do
+    _ ← PC.optionMaybe $ keyword "is"
     n ← PC.optionMaybe $ keyword "not"
-    pure $ isNothing n
-  let inv = fromMaybe false mbInv
-  suffix ← betweenSuffix <|> inSuffix <|> likeSuffix
+    pure $ isJust n
+  suffix ← asErrorMessage "`LIKE`, `IN`, or `BETWEEN`" do
+    betweenSuffix <|> inSuffix <|> likeSuffix
   pure \e → (if inv then _NOT else id) $ suffix e
 
 betweenSuffix ∷ ∀ m t. SqlParser m t (t → t)
