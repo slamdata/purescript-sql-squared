@@ -55,6 +55,7 @@ select 12
   , E.Right """select * from foo LEFT JOIN bar on baz"""
   , E.Right """select * from foo RIGHT OUTER JOIN bar on baz"""
   , E.Right """select * from foo RIGHT JOIN bar on baz"""
+  , E.Right """industry"""
   ]
 
 testSuite ∷ ∀ e. TestSuite (testOutput ∷ Console.TESTOUTPUT | e)
