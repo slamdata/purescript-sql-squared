@@ -8,8 +8,10 @@ module SqlSquared.Parser
 import Prelude
 
 import Control.Alt ((<|>))
+import Control.Lazy (defer)
 import Control.Monad.Error.Class (catchError)
 import Control.Monad.State (get, put)
+import Control.MonadZero (guard)
 
 import Data.Array as A
 import Data.NonEmpty ((:|))
@@ -23,13 +25,15 @@ import Data.Tuple (Tuple(..), uncurry)
 import Data.Path.Pathy as Pt
 import Data.String as S
 
-import SqlSquared.Utils ((∘), type (×), (×))
+import SqlSquared.Constructors as C
 import SqlSquared.Parser.Tokenizer (Token(..), TokenStream, PositionedToken, tokenize, Literal(..), printToken)
 import SqlSquared.Signature as Sig
+import SqlSquared.Utils ((∘), type (×), (×))
 import Matryoshka (class Corecursive, embed)
 
 import Text.Parsing.Parser as P
 import Text.Parsing.Parser.Combinators as PC
+import Text.Parsing.Parser.Pos as PP
 
 type SqlParser m t r =
   Corecursive t (Sig.SqlF EJ.EJsonF)
@@ -51,14 +55,14 @@ asErrorMessage ∷ ∀ m a. Monad m ⇒ String → P.ParserT TokenStream m a →
 asErrorMessage err = flip (<|>) do
   P.ParseState input _ _ ← get
   case A.head input of
-    Nothing → P.fail $ "Expected " <> err <> ", got EOF"
+    Nothing → P.fail $ "Expected " <> err <> ", got end of input"
     Just tk → P.failWithPosition ("Expected " <> err <> ", got " <> printToken tk.token) tk.position
 
 withToken ∷ ∀ m a. Monad m ⇒ String → (Token → P.ParserT TokenStream m a) → P.ParserT TokenStream m a
 withToken err k =
   PC.try
     $ withErrorMessage (append $ err <> ", got ")
-    ((withErrorMessage' (const "EOF") token) >>= k)
+    ((withErrorMessage' (const "end of input") token) >>= k)
 
 parse
   ∷ ∀ t
@@ -72,27 +76,30 @@ parseQuery
   . Corecursive t (Sig.SqlF EJ.EJsonF)
   ⇒ String
   → E.Either P.ParseError (Sig.SqlQueryF t)
-parseQuery = tokenize >=> flip P.runParser (go <* eof)
-  where
-  go =
-    Sig.Query
-      <$> (PC.sepEndBy (import_ <|> functionDecl expr) $ operator ";")
-      <*> expr
+parseQuery = tokenize >=> flip P.runParser (queryTop <* eof)
 
 parseModule
   ∷ ∀ t
   . Corecursive t (Sig.SqlF EJ.EJsonF)
   ⇒ String
   → E.Either P.ParseError (Sig.SqlModuleF t)
-parseModule = tokenize >=> flip P.runParser (go <* eof)
-  where
-  go = Sig.Module <$> (PC.sepBy (import_ <|> functionDecl expr) $ operator ";")
+parseModule = tokenize >=> flip P.runParser (moduleTop <* eof)
+
+queryTop ∷ ∀ m t. SqlParser m t (Sig.SqlQueryF t)
+queryTop = defer \_ → Sig.Query <$> (PC.sepEndBy decl $ operator ";") <*> expr
+
+moduleTop ∷ ∀ m t. SqlParser m t (Sig.SqlModuleF t)
+moduleTop = defer \_ → Sig.Module <$> PC.sepBy decl (operator ";")
+
+decl ∷ ∀ m t. SqlParser m t (Sig.SqlDeclF t)
+decl = asErrorMessage "import or function declaration" do
+  import_ <|> functionDecl expr
 
 token ∷ ∀ m. Monad m ⇒ P.ParserT TokenStream m Token
 token = do
   P.ParseState input _ _ ← get
   case A.uncons input of
-    Nothing → P.fail "Unexpected EOF"
+    Nothing → P.fail "Unexpected end of input"
     Just { head, tail } → do
       put $ P.ParseState tail head.position true
       pure head.token
@@ -137,7 +144,8 @@ anyKeyword = withToken "keyword" case _ of
   tok → P.fail $ printToken tok
 
 expr ∷ ∀ m t. SqlParser' m t
-expr = letExpr <|> queryExpr
+expr = asErrorMessage "let binding or expression" do
+  letExpr <|> queryExpr
 
 letExpr ∷ ∀ m t. SqlParser' m t
 letExpr = do
@@ -145,7 +153,7 @@ letExpr = do
   bindTo ← expr
   operator ";"
   in_ ← expr
-  pure $ embed $ Sig.Let { ident: i, bindTo, in_ }
+  pure $ C.let_ i bindTo in_
 
 queryExpr ∷ ∀ m t. SqlParser' m t
 queryExpr = prod (query <|> definedExpr) queryBinop _BINOP
@@ -157,8 +165,8 @@ queryBinop = asErrorMessage "query operator" $ PC.choice
   , keyword "sample" $> Sig.Sample
   , keyword "union" $> Sig.Union
   , keyword "union" *> keyword "all" $> Sig.UnionAll
+  , PC.try $ keyword "intersect" *> keyword "all" $> Sig.IntersectAll
   , keyword "intersect" $> Sig.Intersect
-  , keyword "intersect" *> keyword "all" $> Sig.IntersectAll
   , keyword "except" $> Sig.Except
   ]
 
@@ -229,49 +237,37 @@ derefExpr = do
   where
   modifier = asErrorMessage "dereference operator" $ PC.choice
     [ fieldDeref
-    , operator "{*:}" $> _UNOP Sig.FlattenMapKeys
-    , operator "{*}" $> _UNOP Sig.FlattenMapValues
-    , operator "{:*}" $> _UNOP Sig.FlattenMapValues
-    , operator "{_:}" $> _UNOP Sig.ShiftMapKeys
-    , operator "{_}" $> _UNOP Sig.ShiftMapValues
-    , operator "{:_}" $> _UNOP Sig.ShiftMapValues
+    , operator "{*:}" $> C.unop Sig.FlattenMapKeys
+    , operator "{*}" $> C.unop Sig.FlattenMapValues
+    , operator "{:*}" $> C.unop Sig.FlattenMapValues
+    , operator "{_:}" $> C.unop Sig.ShiftMapKeys
+    , operator "{_}" $> C.unop Sig.ShiftMapValues
+    , operator "{:_}" $> C.unop Sig.ShiftMapValues
     , fieldDerefExpr
-    , operator "[*:]" $> _UNOP Sig.FlattenArrayIndices
-    , operator "[*]" $> _UNOP Sig.FlattenArrayValues
-    , operator "[:*]" $> _UNOP Sig.FlattenArrayValues
-    , operator "[_:]" $> _UNOP Sig.ShiftArrayIndices
-    , operator "[_]" $> _UNOP Sig.ShiftArrayValues
+    , operator "[*:]" $> C.unop Sig.FlattenArrayIndices
+    , operator "[*]" $> C.unop Sig.FlattenArrayValues
+    , operator "[:*]" $> C.unop Sig.FlattenArrayValues
+    , operator "[_:]" $> C.unop Sig.ShiftArrayIndices
+    , operator "[_]" $> C.unop Sig.ShiftArrayValues
     , indexDerefExpr
     ]
 
   fieldDeref = do
     operator "."
     k ← ident
-    pure \e → embed $ Sig.Binop
-      { op: Sig.FieldDeref
-      , lhs: e
-      , rhs: embed $ Sig.Ident k
-      }
+    pure \e → C.binop Sig.FieldDeref e (C.ident k)
 
   fieldDerefExpr = do
     operator "{"
     rhs ← expr
     operator "}"
-    pure \e → embed $ Sig.Binop
-      { op: Sig.FieldDeref
-      , lhs: e
-      , rhs
-      }
+    pure \e → C.binop Sig.FieldDeref e rhs
 
   indexDerefExpr = do
     operator "["
     rhs ← expr
     operator "]"
-    pure \e → embed $ Sig.Binop
-      { op: Sig.IndexDeref
-      , lhs: e
-      , rhs
-      }
+    pure \e → C.binop Sig.IndexDeref e rhs
 
 wildcard ∷ ∀ m t. SqlParser' m t
 wildcard = operator "*" $> embed (Sig.Splice Nothing)
@@ -298,14 +294,12 @@ caseExpr = PC.try switchExpr <|> matchExpr
   where
   switchExpr = do
     _ ← keyword "case"
-    cs × else_ ← cases
-    pure $ embed $ Sig.Switch { cases: cs, else_ }
+    uncurry C.switch <$> cases
 
   matchExpr = do
     _ ← keyword "case"
     e ← expr
-    cs × else_ ← cases
-    pure $ embed $ Sig.Match { expr: e, cases: cs, else_ }
+    uncurry (C.match e) <$> cases
 
 cases ∷ ∀ m t. SqlParser m t (L.List (Sig.Case t) × Maybe t)
 cases = do
@@ -331,7 +325,7 @@ unshiftExpr = unshiftArrayExpr <|> unshiftMapExpr
     e ← expr
     _ ← operator "..."
     _ ← operator "]"
-    pure $ embed $ Sig.Unop { op: Sig.UnshiftArray, expr: e }
+    pure $ C.unop Sig.UnshiftArray e
 
   unshiftMapExpr = do
     _ ← operator "{"
@@ -340,7 +334,7 @@ unshiftExpr = unshiftArrayExpr <|> unshiftMapExpr
     rhs ← expr
     _ ← operator "..."
     _ ← operator "}"
-    pure $ embed $ Sig.Binop { op: Sig.UnshiftMap, lhs, rhs }
+    pure $ C.binop Sig.UnshiftMap lhs rhs
 
 parenList ∷ ∀ m t. SqlParser m t (L.List t)
 parenList = do
@@ -353,7 +347,7 @@ unaryOperator ∷ ∀ m t. SqlParser' m t
 unaryOperator = do
   op ← unaryOp
   e ← primaryExpr
-  pure $ embed $ Sig.Unop { op, expr: e }
+  pure $ C.unop op e
   where
   unaryOp = PC.choice
     [ operator "-" $> Sig.Negative
@@ -367,7 +361,7 @@ functionExpr ∷ ∀ m t. SqlParser' m t
 functionExpr = PC.try do
   name ← ident
   args ← parenList
-  pure $ embed $ Sig.InvokeFunction { name, args }
+  pure $ C.invokeFunction name args
 
 functionDecl
   ∷ ∀ m a
@@ -378,7 +372,7 @@ functionDecl parseExpr = asErrorMessage "function declaration" do
   _ ← PC.try $ keyword "create" *> keyword "function"
   name ← ident
   operator "("
-  args ← PC.sepBy (operator ":" *> (ident <|> anyKeyword)) $ operator ","
+  args ← PC.sepBy variableString $ operator ","
   operator ")"
   _ ← keyword "begin"
   body ← parseExpr
@@ -395,10 +389,16 @@ import_ = asErrorMessage "import declaration" do
   pure $ Sig.Import s
 
 variable ∷ ∀ m t. SqlParser' m t
-variable = asErrorMessage "variable" do
+variable = C.vari <$> variableString
+
+variableString ∷ ∀ m. Monad m ⇒ P.ParserT TokenStream m String
+variableString = asErrorMessage "variable" $ PC.try do
   operator ":"
+  PP.Position pos1 ← P.position
   s ← ident <|> anyKeyword
-  pure $ embed $ Sig.Vari s
+  PP.Position pos2 ← P.position
+  guard (pos1.line == pos2.line && pos2.column == pos1.column + 1)
+  pure s
 
 literal ∷ ∀ m t. SqlParser' m t
 literal = PC.tryRethrow $ token >>= case _ of
@@ -421,13 +421,14 @@ arrayLiteral = do
 mapLiteral ∷ ∀ m t. SqlParser' m t
 mapLiteral = do
   operator "{"
-  els ← PC.sepBy pair $ operator ","
+  els ← PC.sepBy keyValuePair $ operator ","
   operator "}"
   pure $ embed $ Sig.Literal $ EJ.Map $ EJ.EJsonMap $ A.fromFoldable els
 
-pair ∷ ∀ m t. SqlParser m t (t × t)
-pair = do
-  l ← PC.try $ expr <* operator ":"
+keyValuePair ∷ ∀ m t. SqlParser m t (t × t)
+keyValuePair = do
+  l ← expr
+  operator ":"
   r ← expr
   pure $ l × r
 
@@ -447,13 +448,13 @@ betweenSuffix = do
   lhs ← defaultExpr
   _ ← keyword "and"
   rhs ← defaultExpr
-  pure $ \e → embed $ Sig.InvokeFunction { name: "BETWEEN", args: e:lhs:rhs:L.Nil }
+  pure \e → C.invokeFunction "BETWEEN" (e : lhs : rhs : L.Nil)
 
 inSuffix ∷ ∀ m t. SqlParser m t (t → t)
 inSuffix = do
   _ ← keyword "in"
   rhs ← defaultExpr
-  pure $ \lhs → embed $ Sig.Binop { op: Sig.In, lhs, rhs }
+  pure \lhs → C.binop Sig.In lhs rhs
 
 likeSuffix ∷ ∀ m t. SqlParser m t (t → t)
 likeSuffix = do
@@ -462,13 +463,13 @@ likeSuffix = do
   mbEsc ← PC.optionMaybe do
     _ ← keyword "escape"
     defaultExpr
-  pure $ \lhs → _LIKE mbEsc lhs rhs
+  pure \lhs → _LIKE mbEsc lhs rhs
 
 relationalSuffix ∷ ∀ m t. SqlParser m t (t → t)
 relationalSuffix = do
   op ← relationalOp
   rhs ← defaultExpr
-  pure $ \lhs → embed $ Sig.Binop { op, lhs, rhs }
+  pure \lhs → C.binop op lhs rhs
 
 relationalOp ∷ ∀ m. Monad m ⇒ P.ParserT TokenStream m (Sig.BinaryOperator)
 relationalOp = PC.choice
@@ -510,7 +511,7 @@ relations = do
     foldFn (Just left) right =
       Just $ Sig.JoinRelation
         { joinType: Sig.InnerJoin, left, right
-        , clause: embed $ Sig.Literal $ EJ.Boolean true
+        , clause: C.bool true
         }
     res = F.foldl foldFn Nothing rels
   case res of
@@ -600,7 +601,7 @@ crossJoinRelation = do
       { joinType: Sig.InnerJoin
       , left
       , right
-      , clause: embed $ Sig.Literal $ EJ.Boolean true
+      , clause: C.bool true
       }
 
 filter ∷ ∀ m t. SqlParser' m t
@@ -659,25 +660,16 @@ projection = do
   pure $ Sig.Projection { expr: e, alias: a }
 
 _SEARCH ∷ ∀ t. Corecursive t (Sig.SqlF EJ.EJsonF) ⇒ Boolean → t → t → t
-_SEARCH b lhs rhs = embed $ Sig.InvokeFunction
-  { name: "SEARCH"
-  , args: lhs : rhs : (embed $ Sig.Literal $ EJ.Boolean b) : L.Nil
-  }
+_SEARCH b lhs rhs = C.invokeFunction "SEARCH" $ lhs : rhs : (C.bool b) : L.Nil
 
 _LIKE ∷ ∀ t. Corecursive t (Sig.SqlF EJ.EJsonF) ⇒ Maybe t → t → t → t
-_LIKE mbEsc lhs rhs = embed $ Sig.InvokeFunction
-  { name: "LIKE"
-  , args: lhs : rhs : (fromMaybe (embed $ Sig.Literal $ EJ.String "\\") mbEsc) : L.Nil
-  }
+_LIKE mbEsc lhs rhs = C.invokeFunction "LIKE" $ lhs : rhs : (fromMaybe (C.string "\\") mbEsc) : L.Nil
 
 _NOT ∷ ∀ t. Corecursive t (Sig.SqlF EJ.EJsonF) ⇒ t → t
-_NOT e = embed $ Sig.Unop {op: Sig.Not, expr: e}
+_NOT = C.unop Sig.Not
 
 _BINOP ∷ ∀ t. Corecursive t (Sig.SqlF EJ.EJsonF) ⇒ t → Sig.BinaryOperator → t → t
-_BINOP lhs op rhs = embed $ Sig.Binop { lhs, op, rhs }
+_BINOP = flip C.binop
 
 _BINOP' ∷ ∀ t a. Corecursive t (Sig.SqlF EJ.EJsonF) ⇒ Sig.BinaryOperator → t → a → t → t
-_BINOP' op lhs _ rhs = embed $ Sig.Binop { lhs, op, rhs }
-
-_UNOP ∷ ∀ t. Corecursive t (Sig.SqlF EJ.EJsonF) ⇒ Sig.UnaryOperator → t → t
-_UNOP op e = embed $ Sig.Unop { op, expr: e }
+_BINOP' op lhs _ = C.binop op lhs
