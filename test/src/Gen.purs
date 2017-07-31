@@ -51,5 +51,5 @@ test ∷ ∀ r. Eff (TestEffects r) Unit
 test = do
   Console.printLabel "\n\n:::::::::: TESTING Argonaut codecs ::::::::::\n\n"
   foreachE (1 .. 20) $ const $ testJsonSerialization
-  Console.printLabel "\n\n:::::::::: TESTING TOKENIZER ::::::::::\n\n"
-  foreachE (1 .. 20) $ const $ testTokenizer
+  -- Console.printLabel "\n\n:::::::::: TESTING TOKENIZER ::::::::::\n\n"
+  -- foreachE (1 .. 20) $ const $ testTokenizer

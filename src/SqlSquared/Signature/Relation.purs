@@ -8,7 +8,7 @@ import Data.Foldable as F
 import Data.Int as Int
 import Data.Monoid (mempty)
 import Data.Traversable as T
-import Data.Maybe (Maybe, maybe)
+import Data.Maybe (Maybe)
 import Data.Path.Pathy as Pt
 
 import Matryoshka (Algebra, CoalgebraM)
@@ -39,11 +39,7 @@ type VariRelR =
   }
 
 type TableRelR =
-  -- Quasar uses unsandboxed paths because its table relation
-  -- is produced by precompilation of any identifier relation
-  -- that can fail if paths are incorrect. Here we provide only
-  -- correct paths and omit anything → path step
-  { path ∷ Either (Pt.AbsFile Pt.Sandboxed) (Pt.RelFile Pt.Sandboxed)
+  { path ∷ Either (Pt.AbsFile Pt.Unsandboxed) (Pt.RelFile Pt.Unsandboxed)
   , alias ∷ Maybe String
   }
 
@@ -96,7 +92,7 @@ printRelation = case _ of
     ":" <> ID.printIdent vari <> F.foldMap (" AS " <> _) alias
   TableRelation { path, alias } →
     "`"
-    <> either Pt.printPath Pt.printPath path
+    <> either Pt.unsafePrintPath Pt.unsafePrintPath path
     <> "`"
     <> F.foldMap (\x → " AS " <> ID.printIdent x) alias
   JoinRelation { left, right, joinType, clause } →
@@ -122,7 +118,7 @@ encodeJsonRelation = case _ of
     J.~> J.jsonEmptyObject
   TableRelation { path, alias } →
     "tag" J.:= "table relation"
-    J.~> "path" J.:= either Pt.printPath Pt.printPath path
+    J.~> "path" J.:= either Pt.unsafePrintPath Pt.unsafePrintPath path
     J.~> "alias" J.:= alias
     J.~> J.jsonEmptyObject
   JoinRelation { left, right, joinType, clause } →
@@ -159,13 +155,8 @@ decodeJsonRelation = J.decodeJson >=> \obj → do
       Pt.parsePath
         (const $ Left "incorrect path")
         (const $ Left "incorrect path")
-
-        (maybe (Left "incorrect path")
-           (Right ∘ Right)
-         ∘ Pt.sandbox Pt.currentDir)
-        (maybe (Left "incorrect path")
-           (Right ∘ Left ∘ (Pt.rootDir Pt.</> _))
-         ∘ Pt.sandbox Pt.rootDir)
+        (Right ∘ Right)
+        (Right ∘ Left)
         pathStr
     alias ← obj J..? "alias"
     pure $ TableRelation { path, alias }

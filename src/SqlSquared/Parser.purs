@@ -20,7 +20,7 @@ import Data.Either as E
 import Data.Foldable as F
 import Data.List ((:))
 import Data.List as L
-import Data.Maybe (Maybe(..), fromMaybe, isJust, maybe)
+import Data.Maybe (Maybe(..), fromMaybe, isJust)
 import Data.NonEmpty ((:|))
 import Data.Json.Extended as EJ
 import Data.Tuple (Tuple(..), uncurry)
@@ -88,7 +88,7 @@ prettyParse parser input =
       nums = A.mapWithIndex (\n l → padLeft 4 (show (n + pos.line - (A.length pre))) <> " | " <> l) (pre <> line <> post)
       pointer = pure $ S.fromCharArray (A.replicate (pos.column - 1 + 7) '-') <> "^ " <> message
     in
-      S.joinWith "\n" $ A.take 3 nums <> pointer <> A.drop 3 nums
+      S.joinWith "\n" $ A.take (A.length pre + 1) nums <> pointer <> A.drop 3 nums
 
 parse
   ∷ ∀ t
@@ -215,7 +215,7 @@ andExpr = prod cmpExpr (keyword "and") $ _BINOP' Sig.And
 cmpExpr ∷ ∀ m t. SqlParser' m t
 cmpExpr = do
   e ← defaultExpr
-  modifiers ← A.many $ negatableSuffix <|> relationalSuffix
+  modifiers ← A.many $ PC.try negatableSuffix <|> relationalSuffix
   pure $ F.foldl (\acc fn → fn acc) e modifiers
 
 defaultExpr ∷ ∀ m t. SqlParser' m t
@@ -280,7 +280,7 @@ derefExpr = do
 
   fieldDeref = do
     operator "."
-    k ← ident
+    k ← ident <|> anyKeyword <|> stringLiteral
     pure \e → C.binop Sig.FieldDeref e (C.ident k)
 
   fieldDerefExpr = do
@@ -385,7 +385,7 @@ unaryOperator = do
 
 functionExpr ∷ ∀ m t. SqlParser' m t
 functionExpr = PC.try do
-  name ← ident
+  name ← ident <|> anyKeyword
   args ← parenList
   pure $ C.invokeFunction name args
 
@@ -427,7 +427,7 @@ variableString = asErrorMessage "variable" $ PC.try do
   pure s
 
 literal ∷ ∀ m t. SqlParser' m t
-literal = PC.tryRethrow $ token >>= case _ of
+literal = withToken "literal" case _ of
   Lit (String s) → pure $ embed $ Sig.Literal $ EJ.String s
   Lit (Integer i) → pure $ embed $ Sig.Literal $ EJ.Integer i
   Lit (Decimal d) → pure $ embed $ Sig.Literal $ EJ.Decimal d
@@ -435,7 +435,12 @@ literal = PC.tryRethrow $ token >>= case _ of
     | s == "null" → pure $ embed $ Sig.Literal $ EJ.Null
     | s == "true" → pure $ embed $ Sig.Literal $ EJ.Boolean true
     | s == "false" → pure $ embed $ Sig.Literal $ EJ.Boolean false
-  _ → P.fail "incorrect literal"
+  _ → P.fail "not a literal"
+
+stringLiteral ∷ ∀ m. Monad m ⇒ P.ParserT TokenStream m String
+stringLiteral = withToken "string literal" case _ of
+  Lit (String s) → pure s
+  _ → P.fail "not a string"
 
 arrayLiteral ∷ ∀ m t. SqlParser' m t
 arrayLiteral = do
@@ -461,11 +466,10 @@ keyValuePair = do
 negatableSuffix ∷ ∀ m t. SqlParser m t (t → t)
 negatableSuffix = do
   inv ← do
-    _ ← PC.optionMaybe $ keyword "is"
+    _ ← PC.optionMaybe (keyword "is")
     n ← PC.optionMaybe $ keyword "not"
     pure $ isJust n
-  suffix ← asErrorMessage "`LIKE`, `IN`, or `BETWEEN`" do
-    betweenSuffix <|> inSuffix <|> likeSuffix
+  suffix ← betweenSuffix <|> inSuffix <|> likeSuffix
   pure \e → (if inv then _NOT else id) $ suffix e
 
 betweenSuffix ∷ ∀ m t. SqlParser m t (t → t)
@@ -563,12 +567,8 @@ tableRelation = do
     Pt.parsePath
       (const $ P.fail "incorrect path")
       (const $ P.fail "incorrect path")
-      (maybe (P.fail "incorrect path")
-       (pure ∘ E.Right)
-       ∘ Pt.sandbox Pt.currentDir)
-      (maybe (P.fail "incorrect path")
-       (pure ∘ E.Left ∘ (Pt.rootDir Pt.</> _))
-       ∘ Pt.sandbox Pt.rootDir)
+      (pure ∘ E.Right)
+      (pure ∘ E.Left)
       i
   a ← PC.optionMaybe do
     _ ← keyword "as"
