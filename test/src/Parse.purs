@@ -3,7 +3,7 @@ module Test.Parse where
 import Prelude
 
 import Data.Either as E
-import SqlSquared (parseQuery, SqlQuery)
+import SqlSquared (parseQuery, printQuery, SqlQuery)
 import SqlSquared.Parser (prettyParse)
 
 import Test.Queries as Q
@@ -16,7 +16,22 @@ parseSucc s =
   test "parse/success"
   case prettyParse parseQuery s of
     E.Left err → Assert.assert ("\n" <> err) false
-    E.Right (sql ∷ SqlQuery) → pure unit
+    E.Right (sql ∷ SqlQuery) →
+      case prettyParse parseQuery (printQuery sql) of
+        E.Left err →
+          Assert.assert
+            ("Failed to print and reparse.\n\n" <>
+             "  Original: " <> s <> "\n\n" <>
+             "  Printed:  " <> printQuery sql <> "\n\n" <> err) false
+        E.Right (sql' ∷ SqlQuery)
+          | sql' /= sql →
+            Assert.assert
+              ("Failed to parse to an equivalent AST.\n\n" <>
+               "  Original: " <> s <> "\n\n" <>
+               "  Parsed:   " <> printQuery sql <> "\n\n" <>
+               "  Printed:  " <> printQuery sql') false
+          | otherwise →
+            Assert.assert "OK!" true
 
 parseFail ∷ ∀ e. String → TestSuite (testOutput ∷ Console.TESTOUTPUT | e)
 parseFail s =

@@ -85,6 +85,7 @@ operators =
   , "[*:]"
   , "[*]"
   , "[:*]"
+  , "[_:]"
   , "[_]"
   , "..."
   , ".."
@@ -182,14 +183,12 @@ digits ∷ Array Char
 digits = ['0','1','2','3','4','5','6','7','8','9' ]
 
 identOrKeyword ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
-identOrKeyword = PC.try quotedIdent <|> notQuotedIdentOrKeyword
+identOrKeyword = quotedIdent <|> notQuotedIdentOrKeyword
 
 oneLineComment ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
-oneLineComment =
-  PC.between (PS.string "--") (PS.string "\n")
-    $ map (Comment ∘ S.fromCharArray)
-    $ A.many $ PS.satisfy
-    $ not ∘ eq '\n'
+oneLineComment = do
+  _ ← PS.string "--"
+  Comment ∘ S.fromCharArray <$> A.many (PS.satisfy (not ∘ eq '\n'))
 
 multiLineComment ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
 multiLineComment = do
@@ -212,7 +211,7 @@ quotedIdent =
   map Identifier
     $ PC.between (PS.string "`") (PS.string "`")
     $ map S.fromCharArray
-    $ A.some identChar
+    $ A.some (PC.asErrorMessage "identifier character" identChar)
   where
   identChar = identEscape <|> identLetter
   identLetter = PS.satisfy (not ∘ eq '`')
@@ -245,11 +244,19 @@ charLit = PS.char '\'' *> charAtom <* PS.char '\''
     ch ← PS.anyChar
     Lit ∘ String ∘ S.singleton <$> case ch of
       '\'' → P.fail "Expected character"
-      '\\' → charEscape <|> PS.anyChar
+      '\\' → charEscape
       _    → pure ch
 
   charEscape = do
-    _ ← PS.char 'u'
+    ch ← PS.anyChar
+    case ch of
+      't' → pure '\t'
+      'r' → pure '\r'
+      'n' → pure '\n'
+      'u' → hexEscape
+      _   → pure ch
+
+  hexEscape = do
     hex ← S.fromCharArray <$> sequence (A.replicate 4 PT.hexDigit)
     case Int.fromStringAs Int.hexadecimal hex of
       Nothing → P.fail "Expected character escape sequence"

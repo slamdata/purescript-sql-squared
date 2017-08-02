@@ -5,7 +5,7 @@ import Prelude
 import Data.Argonaut as J
 import Data.Either (Either(..))
 
-import Test.StrongCheck.Arbitrary as A
+import Test.QuickCheck.Arbitrary as A
 
 data OrderType = ASC | DESC
 

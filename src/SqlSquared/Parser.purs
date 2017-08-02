@@ -64,7 +64,7 @@ withToken ∷ ∀ m a. Monad m ⇒ String → (Token → P.ParserT TokenStream m
 withToken err k =
   PC.try
     $ withErrorMessage (append $ err <> ", but got ")
-    ((withErrorMessage' (const "end of input") token) >>= k)
+    $ (withErrorMessage' (const "end of input") token) >>= k
 
 prettyParse
   ∷ ∀ a
@@ -387,7 +387,7 @@ functionExpr ∷ ∀ m t. SqlParser' m t
 functionExpr = PC.try do
   name ← ident <|> anyKeyword
   args ← parenList
-  pure $ C.invokeFunction name args
+  pure $ C.invokeFunction (S.toUpper name) args
 
 functionDecl
   ∷ ∀ m a
@@ -692,7 +692,7 @@ _LIKE ∷ ∀ t. Corecursive t (Sig.SqlF EJ.EJsonF) ⇒ Maybe t → t → t → 
 _LIKE mbEsc lhs rhs = C.invokeFunction "LIKE" $ lhs : rhs : (fromMaybe (C.string "\\") mbEsc) : L.Nil
 
 _NOT ∷ ∀ t. Corecursive t (Sig.SqlF EJ.EJsonF) ⇒ t → t
-_NOT = C.unop Sig.Not
+_NOT = C.unop Sig.Not ∘ C.pars
 
 _BINOP ∷ ∀ t. Corecursive t (Sig.SqlF EJ.EJsonF) ⇒ t → Sig.BinaryOperator → t → t
 _BINOP = flip C.binop

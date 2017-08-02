@@ -35,7 +35,7 @@ import SqlSquared.Lenses as Lenses
 import SqlSquared.Constructors as Constructors
 import SqlSquared.Parser as Parser
 
-import Test.StrongCheck.Gen as Gen
+import Test.QuickCheck.Gen as Gen
 
 type Sql = Mu (Sig.SqlF EJ.EJsonF)
 

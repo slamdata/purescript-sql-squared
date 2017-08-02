@@ -4,11 +4,9 @@ import Prelude
 
 import Data.Argonaut as J
 import Data.Either (Either(..))
-import Data.List ((:))
-import Data.List as L
-
-import Test.StrongCheck.Arbitrary as A
-import Test.StrongCheck.Gen as Gen
+import Data.NonEmpty ((:|))
+import Test.QuickCheck.Arbitrary as A
+import Test.QuickCheck.Gen as Gen
 
 data UnaryOperator
   = Not
@@ -79,12 +77,13 @@ instance decodeJsonUnaryOperator ∷ J.DecodeJson UnaryOperator where
 
 instance arbitaryUnaryOperator ∷ A.Arbitrary UnaryOperator where
   arbitrary =
-    Gen.elements Not
-      $ Exists : Positive : Negative : Distinct : FlattenMapKeys
-      : FlattenMapValues : ShiftMapKeys : ShiftMapValues
-      : FlattenArrayIndices : FlattenArrayValues
-      : ShiftArrayIndices : ShiftArrayValues
-      : UnshiftArray : L.Nil
+    Gen.elements $ Not :|
+      [ Exists, Positive, Negative, Distinct, FlattenMapKeys
+      , FlattenMapValues, ShiftMapKeys, ShiftMapValues
+      , FlattenArrayIndices, FlattenArrayValues
+      , ShiftArrayIndices, ShiftArrayValues
+      , UnshiftArray
+      ]
 
 printUnaryOperator ∷ String → UnaryOperator → String
 printUnaryOperator expr = case _ of
@@ -95,7 +94,7 @@ printUnaryOperator expr = case _ of
   Distinct → "DISTINCT " <> expr
   FlattenMapKeys → expr <> "{*:}"
   FlattenMapValues → expr <> "{*}"
-  ShiftMapKeys → expr <> "{_: }"
+  ShiftMapKeys → expr <> "{_:}"
   ShiftMapValues → expr <> "{_}"
   FlattenArrayIndices → expr <> "[*:]"
   FlattenArrayValues → expr <> "[*]"
