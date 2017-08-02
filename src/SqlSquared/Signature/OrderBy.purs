@@ -16,8 +16,8 @@ import SqlSquared.Signature.OrderType as OT
 
 import SqlSquared.Utils ((×), type (×))
 
-import Test.StrongCheck.Arbitrary as SC
-import Test.StrongCheck.Gen as Gen
+import Test.QuickCheck.Arbitrary as QC
+import Test.QuickCheck.Gen as Gen
 
 newtype OrderBy a = OrderBy (NE.NonEmpty L.List (OT.OrderType × a))
 
@@ -55,15 +55,15 @@ decodeJsonOrderBy = J.decodeJson >=> \obj → do
 arbitraryOrderBy ∷ CoalgebraM Gen.Gen OrderBy Int
 arbitraryOrderBy n
   | n < 2 = do
-    ot ← SC.arbitrary
+    ot ← QC.arbitrary
     pure $ OrderBy $ (ot × n - 1) NE.:| L.Nil
   | otherwise = do
     len ← Gen.chooseInt 0 $ n - 1
     let
       foldFn acc _ = do
-        ot ← SC.arbitrary
+        ot ← QC.arbitrary
         pure $ (ot × n - 1) L.: acc
 
     lst ← L.foldM foldFn L.Nil $ L.range 0 len
-    ot ← SC.arbitrary
+    ot ← QC.arbitrary
     pure $ OrderBy $ (ot × n - 1) NE.:| lst

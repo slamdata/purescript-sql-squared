@@ -2,24 +2,23 @@ module SqlSquared.Signature.Relation where
 
 import Prelude
 
+import Control.Monad.Gen.Common as GenC
 import Data.Argonaut as J
 import Data.Either (Either(..), either)
 import Data.Foldable as F
 import Data.Int as Int
+import Data.Maybe (Maybe)
 import Data.Monoid (mempty)
-import Data.Traversable as T
-import Data.Maybe (Maybe, maybe)
+import Data.NonEmpty ((:|))
 import Data.Path.Pathy as Pt
-
+import Data.String.Gen as GenS
+import Data.Traversable as T
 import Matryoshka (Algebra, CoalgebraM)
-
-import SqlSquared.Signature.JoinType as JT
 import SqlSquared.Signature.Ident as ID
-
+import SqlSquared.Signature.JoinType as JT
 import SqlSquared.Utils ((∘))
-
-import Test.StrongCheck.Arbitrary as SC
-import Test.StrongCheck.Gen as Gen
+import Test.QuickCheck.Arbitrary as QC
+import Test.QuickCheck.Gen as Gen
 
 type JoinRelR a =
   { left ∷ Relation a
@@ -39,11 +38,7 @@ type VariRelR =
   }
 
 type TableRelR =
-  -- Quasar uses unsandboxed paths because its table relation
-  -- is produced by precompilation of any identifier relation
-  -- that can fail if paths are incorrect. Here we provide only
-  -- correct paths and omit anything → path step
-  { path ∷ Either (Pt.AbsFile Pt.Sandboxed) (Pt.RelFile Pt.Sandboxed)
+  { path ∷ Either (Pt.AbsFile Pt.Unsandboxed) (Pt.RelFile Pt.Unsandboxed)
   , alias ∷ Maybe String
   }
 
@@ -91,12 +86,12 @@ instance traversableRelation ∷ T.Traversable Relation where
 printRelation ∷ Algebra Relation String
 printRelation = case _ of
   ExprRelation {expr, aliasName} →
-    "(" <> expr <> ") AS " <> aliasName
+    "(" <> expr <> ") AS " <> ID.printIdent aliasName
   VariRelation { vari, alias} →
-    ":" <> ID.printIdent vari <> F.foldMap (" AS " <> _) alias
+    ":" <> ID.printIdent vari <> F.foldMap (\a → " AS " <> ID.printIdent a) alias
   TableRelation { path, alias } →
     "`"
-    <> either Pt.printPath Pt.printPath path
+    <> either Pt.unsafePrintPath Pt.unsafePrintPath path
     <> "`"
     <> F.foldMap (\x → " AS " <> ID.printIdent x) alias
   JoinRelation { left, right, joinType, clause } →
@@ -105,7 +100,7 @@ printRelation = case _ of
     <> JT.printJoinType joinType
     <> " "
     <> printRelation right
-    <> " on "
+    <> " ON "
     <> clause
 
 encodeJsonRelation ∷ Algebra Relation J.Json
@@ -122,7 +117,7 @@ encodeJsonRelation = case _ of
     J.~> J.jsonEmptyObject
   TableRelation { path, alias } →
     "tag" J.:= "table relation"
-    J.~> "path" J.:= either Pt.printPath Pt.printPath path
+    J.~> "path" J.:= either Pt.unsafePrintPath Pt.unsafePrintPath path
     J.~> "alias" J.:= alias
     J.~> J.jsonEmptyObject
   JoinRelation { left, right, joinType, clause } →
@@ -159,13 +154,8 @@ decodeJsonRelation = J.decodeJson >=> \obj → do
       Pt.parsePath
         (const $ Left "incorrect path")
         (const $ Left "incorrect path")
-
-        (maybe (Left "incorrect path")
-           (Right ∘ Right)
-         ∘ Pt.sandbox Pt.currentDir)
-        (maybe (Left "incorrect path")
-           (Right ∘ Left ∘ (Pt.rootDir Pt.</> _))
-         ∘ Pt.sandbox Pt.rootDir)
+        (Right ∘ Right)
+        (Right ∘ Left)
         pathStr
     alias ← obj J..? "alias"
     pure $ TableRelation { path, alias }
@@ -181,35 +171,35 @@ arbitraryRelation ∷ CoalgebraM Gen.Gen Relation Int
 arbitraryRelation n =
   if n < 1
   then
-    Gen.oneOf genTable
+    Gen.oneOf $ genTable :|
       [ genVari
       ]
   else
-    Gen.oneOf genTable
+    Gen.oneOf $ genTable :|
       [ genVari
       , genJoin
       , genExpr
       ]
   where
   genVari = do
-    vari ← SC.arbitrary
-    alias ← SC.arbitrary
+    vari ← GenS.genUnicodeString
+    alias ← GenC.genMaybe GenS.genUnicodeString
     pure $ VariRelation { vari, alias }
   genTable = do
     let
       pathPart =
-        map (Int.toStringAs Int.hexadecimal) SC.arbitrary
+        map (Int.toStringAs Int.hexadecimal) QC.arbitrary
     dirs ← map Pt.dir <$> Gen.vectorOf n pathPart
     fileName ← map Pt.file pathPart
     let
       path = Left $ Pt.rootDir Pt.</> F.foldl (\a b → b Pt.</> a) fileName dirs
-    alias ← SC.arbitrary
+    alias ← GenC.genMaybe GenS.genUnicodeString
     pure $ TableRelation { path, alias }
   genExpr = do
-    aliasName ← SC.arbitrary
+    aliasName ← GenS.genUnicodeString
     pure $ ExprRelation { aliasName, expr: n - 1 }
   genJoin = do
-    joinType ← SC.arbitrary
+    joinType ← QC.arbitrary
     left ← arbitraryRelation $ n - 1
     right ← arbitraryRelation $ n - 1
     pure $ JoinRelation { joinType, left, right, clause: n - 1 }

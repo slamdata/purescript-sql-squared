@@ -10,7 +10,7 @@ import Data.Traversable as T
 
 import Matryoshka (Algebra, CoalgebraM)
 
-import Test.StrongCheck.Gen as Gen
+import Test.QuickCheck.Gen as Gen
 
 newtype Case a = Case { cond ∷ a, expr ∷ a }
 

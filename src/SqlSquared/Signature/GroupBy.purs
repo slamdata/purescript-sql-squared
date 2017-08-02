@@ -12,8 +12,8 @@ import Data.Newtype (class Newtype)
 
 import Matryoshka (Algebra, CoalgebraM)
 
-import Test.StrongCheck.Arbitrary as SC
-import Test.StrongCheck.Gen as Gen
+import Test.QuickCheck.Arbitrary as QC
+import Test.QuickCheck.Gen as Gen
 
 newtype GroupBy a = GroupBy { keys ∷ L.List a, having ∷ Maybe a }
 derive instance newtypeGroupBy ∷ Newtype (GroupBy a) _
@@ -55,7 +55,7 @@ arbitraryGroupBy n
   | n == 0 = pure $ GroupBy { having: Nothing, keys: L.Nil }
   | otherwise = do
     len ← Gen.chooseInt 0 $ n - 1
-    nothing ← SC.arbitrary
+    nothing ← QC.arbitrary
     pure $ GroupBy { having: if nothing then Nothing else Just $ n - 1
                    , keys: map (const $ n - 1) $ L.range 0 len
                    }

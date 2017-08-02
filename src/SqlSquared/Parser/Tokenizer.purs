@@ -1,21 +1,31 @@
 module SqlSquared.Parser.Tokenizer
   ( tokenize
+  , keywords
   , Token(..)
   , Literal(..)
+  , PositionedToken
+  , TokenStream
+  , printToken
   ) where
 
 import Prelude
 
 import Control.Alt ((<|>))
+import Control.Monad.State (get)
 import Data.Array as A
+import Data.Char as Char
 import Data.Either (Either)
 import Data.HugeInt as HI
 import Data.HugeNum as HN
+import Data.Int as Int
 import Data.Json.Extended.Signature.Parse as EJP
+import Data.Maybe (Maybe(..))
 import Data.Set as Set
 import Data.String as S
+import Data.Traversable (sequence)
 import SqlSquared.Utils ((∘))
 import Text.Parsing.Parser as P
+import Text.Parsing.Parser.Pos as PP
 import Text.Parsing.Parser.Combinators as PC
 import Text.Parsing.Parser.String as PS
 import Text.Parsing.Parser.Token as PT
@@ -34,6 +44,15 @@ data Token
   | Lit Literal
   | Comment String
 
+derive instance eqToken ∷ Eq Token
+
+type PositionedToken =
+  { position ∷ PP.Position
+  , token ∷ Token
+  }
+
+type TokenStream = Array PositionedToken
+
 isKeyword ∷ Token → Boolean
 isKeyword = case _ of
   Kw _ → true
@@ -44,53 +63,66 @@ isComment = case _ of
   Comment _ → true
   _ → false
 
-derive instance eqToken ∷ Eq Token
-
+printToken ∷ Token → String
+printToken = case _ of
+  Kw str → "keyword `" <> S.toUpper str <> "`"
+  Op str → "`" <> str <> "`"
+  Identifier _ → "identifier"
+  Lit (String _) → "string literal"
+  Lit (Integer _) → "integer literal"
+  Lit (Decimal _) → "decimal literal"
+  Comment str → "comment"
 
 op ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
-op = map Op $ PC.choice
-  [ PC.try $ PS.string "{*:}"
-  , PC.try $ PS.string "{*}"
-  , PC.try $ PS.string "{:*}"
-  , PC.try $ PS.string "{_:}"
-  , PC.try $ PS.string "{_}"
-  , PC.try $ PS.string "[*:]"
-  , PC.try $ PS.string "[*]"
-  , PC.try $ PS.string "[:*]"
-  , PC.try $ PS.string "[_]"
-  , PC.try $ PS.string "..."
-  , PC.try $ PS.string ".."
-  , PC.try $ PS.string "<>"
-  , PC.try $ PS.string "!="
-  , PC.try $ PS.string "||"
-  , PC.try $ PS.string "??"
-  , PC.try $ PS.string "!~*"
-  , PC.try $ PS.string "!~"
-  , PC.try $ PS.string "!~~"
-  , PC.try $ PS.string "~~"
-  , PC.try $ PS.string "~*"
-  , PC.try $ PS.string ":="
-  , PS.string "~"
-  , PS.string "??"
-  , PS.string "="
-  , PS.string ">"
-  , PS.string "<"
-  , PS.string "["
-  , PS.string "]"
-  , PS.string ":"
-  , PS.string ","
-  , PS.string ";"
-  , PS.string "*"
-  , PS.string "("
-  , PS.string ")"
-  , PS.string "{"
-  , PS.string "}"
-  , PS.string "-"
-  , PS.string "+"
-  , PS.string "^"
-  , PS.string "."
-  , PS.string "/"
-  , PS.string "%"
+op = map Op $ PC.choice $ map PS.string operators
+
+operators ∷ Array String
+operators =
+  [ "{*:}"
+  , "{*}"
+  , "{:*}"
+  , "{_:}"
+  , "{_}"
+  , "[*:]"
+  , "[*]"
+  , "[:*]"
+  , "[_:]"
+  , "[_]"
+  , "..."
+  , ".."
+  , "<>"
+  , "!="
+  , "||"
+  , "??"
+  , "!~*"
+  , "!~"
+  , "!~~"
+  , "~~"
+  , "~*"
+  , ":="
+  , "~"
+  , "??"
+  , "="
+  , ">="
+  , ">"
+  , "<="
+  , "<"
+  , "["
+  , "]"
+  , ":"
+  , ","
+  , ";"
+  , "*"
+  , "("
+  , ")"
+  , "{"
+  , "}"
+  , "-"
+  , "+"
+  , "^"
+  , "."
+  , "/"
+  , "%"
   ]
 
 keywords ∷ Set.Set String
@@ -152,14 +184,12 @@ digits ∷ Array Char
 digits = ['0','1','2','3','4','5','6','7','8','9' ]
 
 identOrKeyword ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
-identOrKeyword = PC.try quotedIdent <|> notQuotedIdentOrKeyword
+identOrKeyword = quotedIdent <|> notQuotedIdentOrKeyword
 
 oneLineComment ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
-oneLineComment =
-  PC.between (PC.try $ PS.string "--") (PS.string "\n")
-    $ map (Comment ∘ S.fromCharArray)
-    $ A.many $ PS.satisfy
-    $ not ∘ eq '\n'
+oneLineComment = do
+  _ ← PS.string "--"
+  Comment ∘ S.fromCharArray <$> A.many (PS.satisfy (not ∘ eq '\n'))
 
 multiLineComment ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
 multiLineComment = do
@@ -182,9 +212,9 @@ quotedIdent =
   map Identifier
     $ PC.between (PS.string "`") (PS.string "`")
     $ map S.fromCharArray
-    $ A.some identChar
+    $ A.some (PC.asErrorMessage "identifier character" identChar)
   where
-  identChar = PC.try identEscape <|> identLetter
+  identChar = identEscape <|> identLetter
   identLetter = PS.satisfy (not ∘ eq '`')
   identEscape = PS.string "\\`" $> '`'
 
@@ -208,21 +238,52 @@ numLit = Lit ∘ Decimal <$> EJP.parseDecimalLiteral
 intLit ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
 intLit = Lit ∘ Integer <$> EJP.parseHugeIntLiteral
 
-tokens ∷ ∀ m. Monad m ⇒ P.ParserT String m (Array Token)
+charLit ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
+charLit = PS.char '\'' *> charAtom <* PS.char '\''
+  where
+  charAtom = PC.tryRethrow do
+    ch ← PS.anyChar
+    Lit ∘ String ∘ S.singleton <$> case ch of
+      '\'' → P.fail "Expected character"
+      '\\' → charEscape
+      _    → pure ch
+
+  charEscape = do
+    ch ← PS.anyChar
+    case ch of
+      't' → pure '\t'
+      'r' → pure '\r'
+      'n' → pure '\n'
+      'u' → hexEscape
+      _   → pure ch
+
+  hexEscape = do
+    hex ← S.fromCharArray <$> sequence (A.replicate 4 PT.hexDigit)
+    case Int.fromStringAs Int.hexadecimal hex of
+      Nothing → P.fail "Expected character escape sequence"
+      Just i → pure $ Char.fromCharCode i
+
+positioned ∷ ∀ m. Monad m ⇒ P.ParserT String m Token → P.ParserT String m PositionedToken
+positioned m = do
+  P.ParseState _ position _ ← get
+  { position, token: _ } <$> m
+
+tokens ∷ ∀ m. Monad m ⇒ P.ParserT String m TokenStream
 tokens = do
   PS.skipSpaces
-  A.some $ PC.choice
+  A.some $ positioned $ PC.choice
     [ skipped oneLineComment
     , skipped multiLineComment
     , skipped op
     , skipped identOrKeyword
-    , skipped numLit
+    , skipped (PC.try numLit)
     , skipped intLit
     , skipped stringLit
+    , skipped charLit
     ]
   where
-  skipped r = PC.try (r <* PS.skipSpaces)
+  skipped r = r <* PS.skipSpaces
 
-tokenize ∷ String → Either P.ParseError (Array Token)
+tokenize ∷ String → Either P.ParseError TokenStream
 tokenize input =
-  A.filter (not ∘ isComment) <$>  P.runParser input tokens
+  A.filter (not ∘ isComment ∘ _.token) <$>  P.runParser input (tokens <* PS.eof)

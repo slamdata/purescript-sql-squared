@@ -1,8 +1,8 @@
 module SqlSquared.Utils where
 
 import Prelude
-import Data.Tuple (Tuple(..))
 import Data.Functor.Coproduct (Coproduct, coproduct)
+import Data.Tuple (Tuple(..))
 
 infixr 4 type Tuple as ×
 infixr 1 Tuple as ×

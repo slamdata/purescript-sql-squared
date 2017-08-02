@@ -4,11 +4,9 @@ import Prelude
 
 import Data.Argonaut as J
 import Data.Either (Either(..))
-import Data.List ((:))
-import Data.List as L
-
-import Test.StrongCheck.Arbitrary as A
-import Test.StrongCheck.Gen as Gen
+import Data.NonEmpty ((:|))
+import Test.QuickCheck.Arbitrary as A
+import Test.QuickCheck.Gen as Gen
 
 data JoinType
   = LeftJoin
@@ -48,5 +46,4 @@ instance decodeJsonJoinType ∷ J.DecodeJson JoinType where
     (obj J..? "value") >>= joinTypeFromString
 
 instance arbitraryJoinType ∷ A.Arbitrary JoinType where
-  arbitrary = Gen.elements LeftJoin
-    $ RightJoin : InnerJoin : FullJoin : L.Nil
+  arbitrary = Gen.elements $ LeftJoin :| [ RightJoin, InnerJoin, FullJoin ]

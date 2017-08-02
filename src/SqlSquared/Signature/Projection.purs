@@ -2,19 +2,18 @@ module SqlSquared.Signature.Projection where
 
 import Prelude
 
+import Control.Monad.Gen.Common as GenC
 import Data.Argonaut as J
 import Data.Either as E
 import Data.Foldable as F
 import Data.Traversable as T
 import Data.Maybe (Maybe)
 import Data.Newtype (class Newtype)
-
+import Data.String.Gen as GenS
 import Matryoshka (Algebra, CoalgebraM)
-
+import SqlSquared.Signature.Ident (printIdent)
 import SqlSquared.Utils ((∘))
-
-import Test.StrongCheck.Arbitrary as SC
-import Test.StrongCheck.Gen as Gen
+import Test.QuickCheck.Gen as Gen
 
 newtype Projection a = Projection { expr ∷ a, alias ∷ Maybe String }
 
@@ -32,7 +31,7 @@ instance traversableProjection ∷ T.Traversable Projection where
   sequence = T.sequenceDefault
 
 printProjection ∷ Algebra Projection String
-printProjection (Projection { expr, alias }) = expr <> F.foldMap (" AS " <> _) alias
+printProjection (Projection { expr, alias }) = expr <> F.foldMap (\a → " AS " <> printIdent a) alias
 
 encodeJsonProjection ∷ Algebra Projection J.Json
 encodeJsonProjection (Projection {expr, alias}) =
@@ -51,5 +50,5 @@ decodeJsonProjection = J.decodeJson >=> \obj → do
 
 arbitraryProjection ∷ CoalgebraM Gen.Gen Projection Int
 arbitraryProjection n = do
-  alias ← SC.arbitrary
+  alias ← GenC.genMaybe GenS.genUnicodeString
   pure $ Projection { expr: n - 1, alias }

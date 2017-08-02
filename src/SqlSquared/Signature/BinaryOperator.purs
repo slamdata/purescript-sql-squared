@@ -4,11 +4,9 @@ import Prelude
 
 import Data.Argonaut as J
 import Data.Either (Either(..))
-import Data.List ((:))
-import Data.List as L
-
-import Test.StrongCheck.Arbitrary as A
-import Test.StrongCheck.Gen as Gen
+import Data.NonEmpty ((:|))
+import Test.QuickCheck.Arbitrary as A
+import Test.QuickCheck.Gen as Gen
 
 data BinaryOperator
   = IfUndefined
@@ -125,12 +123,13 @@ instance decodeJsonBinaryOperator ∷ J.DecodeJson BinaryOperator where
 
 instance arbitraryBinaryOperator ∷ A.Arbitrary BinaryOperator where
   arbitrary =
-    Gen.elements IfUndefined
-      $ Range : Or : And : Eq : Neq : Ge : Gt : Le : Lt
-      : Concat : Plus : Minus : Mult : Div : Mod : Pow
-      : In : FieldDeref : IndexDeref : Limit : Offset
-      : Sample : Union : UnionAll : Intersect
-      : IntersectAll : Except : UnshiftMap : L.Nil
+    Gen.elements $ IfUndefined :|
+      [ Range, Or, And, Eq, Neq, Ge, Gt, Le, Lt
+      , Concat, Plus, Minus, Mult, Div, Mod, Pow
+      , In, FieldDeref, IndexDeref, Limit, Offset
+      , Sample, Union, UnionAll, Intersect
+      , IntersectAll, Except, UnshiftMap
+      ]
 
 printBinaryOperator ∷ String → String → BinaryOperator → String
 printBinaryOperator lhs rhs = case _ of
