@@ -1,5 +1,6 @@
 module SqlSquared.Parser.Tokenizer
   ( tokenize
+  , keywords
   , Token(..)
   , Literal(..)
   , PositionedToken

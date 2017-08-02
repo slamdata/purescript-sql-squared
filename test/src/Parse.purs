@@ -176,6 +176,14 @@ testSuite1 = do
     industry
   """
 
+  parseFail """
+    select foo as between from bar
+  """
+
+  parseSucc """
+    select foo as `between` from bar
+  """
+
 testSuite2 ∷ ∀ e. TestSuite (testOutput ∷ Console.TESTOUTPUT | e)
 testSuite2 = do
   parseSucc """
