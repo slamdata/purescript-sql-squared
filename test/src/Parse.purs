@@ -856,6 +856,14 @@ testSuite5 = do
     select length(city) as len, count(*) as cnt from largeZips where state != "MI" group by length(city)
   """
 
+  parseSucc """
+    select foo.* from zips as foo
+  """
+
+  parseSucc """
+    select foo from bar union all select baz from quux
+  """
+
 testSuite6 ∷ ∀ e. TestSuite (testOutput ∷ Console.TESTOUTPUT | e)
 testSuite6 = do
   parseSucc Q.q1

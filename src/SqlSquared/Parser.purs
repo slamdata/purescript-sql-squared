@@ -189,8 +189,8 @@ queryBinop = asErrorMessage "query operator" $ PC.choice
   [ keyword "limit" $> Sig.Limit
   , keyword "offset" $> Sig.Offset
   , keyword "sample" $> Sig.Sample
+  , PC.try $ keyword "union" *> keyword "all" $> Sig.UnionAll
   , keyword "union" $> Sig.Union
-  , keyword "union" *> keyword "all" $> Sig.UnionAll
   , PC.try $ keyword "intersect" *> keyword "all" $> Sig.IntersectAll
   , keyword "intersect" $> Sig.Intersect
   , keyword "except" $> Sig.Except
@@ -278,7 +278,7 @@ derefExpr = do
     , indexDerefExpr
     ]
 
-  fieldDeref = do
+  fieldDeref = PC.try do
     operator "."
     k ← ident <|> anyKeyword <|> stringLiteral
     pure \e → C.binop Sig.FieldDeref e (C.ident k)
@@ -435,12 +435,12 @@ literal = withToken "literal" case _ of
     | s == "null" → pure $ embed $ Sig.Literal $ EJ.Null
     | s == "true" → pure $ embed $ Sig.Literal $ EJ.Boolean true
     | s == "false" → pure $ embed $ Sig.Literal $ EJ.Boolean false
-  _ → P.fail "not a literal"
+  t → P.fail (printToken t)
 
 stringLiteral ∷ ∀ m. Monad m ⇒ P.ParserT TokenStream m String
 stringLiteral = withToken "string literal" case _ of
   Lit (String s) → pure s
-  _ → P.fail "not a string"
+  t → P.fail (printToken t)
 
 arrayLiteral ∷ ∀ m t. SqlParser' m t
 arrayLiteral = do
