@@ -184,6 +184,10 @@ testSuite1 = do
     select foo as `between` from bar
   """
 
+  parseSucc """
+    select foo from :From
+  """
+
 testSuite2 ∷ ∀ e. TestSuite (testOutput ∷ Console.TESTOUTPUT | e)
 testSuite2 = do
   parseSucc """
