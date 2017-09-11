@@ -578,8 +578,7 @@ tableRelation = do
 
 variRelation ∷ ∀ m t. SqlParser m t (Sig.Relation t)
 variRelation = do
-  operator ":"
-  vari ← ident
+  vari ← variableString
   a ← PC.optionMaybe do
     _ ← keyword "as"
     ident

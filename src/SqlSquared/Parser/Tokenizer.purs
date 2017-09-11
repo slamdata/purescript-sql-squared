@@ -226,7 +226,7 @@ notQuotedIdentOrKeyword = do
     str = S.fromCharArray $ A.cons first other
     low = S.toLower str
   pure if Set.member low keywords
-    then Kw low
+    then Kw str
     else Identifier str
 
 stringLit ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
