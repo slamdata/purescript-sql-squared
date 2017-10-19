@@ -1,10 +1,10 @@
 {
-  "name": "purescript-sqlsquare",
-  "homepage": "https://github.com/slamdata/purescript-sqlsquare",
+  "name": "purescript-sql-squared",
+  "homepage": "https://github.com/slamdata/purescript-sql-squared",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git://github.com/slamdata/purescript-sqlsquare.git"
+    "url": "git://github.com/slamdata/purescript-sql-squared.git"
   },
   "ignore": [
     "**/.*",

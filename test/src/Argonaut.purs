@@ -1,4 +1,4 @@
--- | An example of using `purescript-sqlsquare` library
+-- | An example of using `purescript-sql-squared` library
 -- | Having an array of `Json`s construct a list of Sql² projections
 module Test.Argonaut where
 
