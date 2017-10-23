@@ -64,11 +64,19 @@ testSuite1 = do
   """
 
   parseSucc """
+    SELECT * FROM `/smallZips.json` WHERE city IS null
+  """
+
+  parseSucc """
     SELECT * FROM `/smallZips.json` WHERE city IS NULL
   """
 
   parseSucc """
     SELECT * FROM `/smallZips.json` WHERE city IS NOT NULL
+  """
+
+  parseSucc """
+    SELECT * FROM `/smallZips.json` WHERE city IS NOT null
   """
 
   parseSucc """
