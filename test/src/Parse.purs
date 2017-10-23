@@ -68,6 +68,14 @@ testSuite1 = do
   """
 
   parseSucc """
+    SELECT * FROM `/smallZips.json` WHERE city IS true
+  """
+
+  parseSucc """
+    SELECT * FROM `/smallZips.json` WHERE city IS TRUE
+  """
+
+  parseSucc """
     SELECT * FROM `/smallZips.json` WHERE city IS NULL
   """
 
