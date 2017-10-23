@@ -432,9 +432,9 @@ literal = withToken "literal" case _ of
   Lit (Integer i) → pure $ embed $ Sig.Literal $ EJ.Integer i
   Lit (Decimal d) → pure $ embed $ Sig.Literal $ EJ.Decimal d
   Kw s
-    | s == "null" → pure $ embed $ Sig.Literal $ EJ.Null
-    | s == "true" → pure $ embed $ Sig.Literal $ EJ.Boolean true
-    | s == "false" → pure $ embed $ Sig.Literal $ EJ.Boolean false
+    | S.toLower s == "null" → pure $ embed $ Sig.Literal $ EJ.Null
+    | S.toLower s == "true" → pure $ embed $ Sig.Literal $ EJ.Boolean true
+    | S.toLower s == "false" → pure $ embed $ Sig.Literal $ EJ.Boolean false
   t → P.fail (printToken t)
 
 stringLiteral ∷ ∀ m. Monad m ⇒ P.ParserT TokenStream m String

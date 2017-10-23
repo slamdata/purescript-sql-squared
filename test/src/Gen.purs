@@ -2,11 +2,10 @@ module Test.Gen where
 
 import Prelude
 
-import Control.Monad.Eff (Eff, foreachE)
+import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Console (CONSOLE)
 import Control.Monad.Eff.Exception (EXCEPTION)
 import Control.Monad.Eff.Random (RANDOM)
-import Data.Array ((..))
 import Data.Either as E
 import SqlSquared (SqlQuery, arbitrarySqlQueryOfSize, decodeJsonQuery, encodeJsonQuery, printQuery, tokenize)
 import Test.QuickCheck ((<?>))
