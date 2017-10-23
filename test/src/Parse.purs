@@ -52,6 +52,26 @@ testSuite = suite "parsers" do
 testSuite1 ∷ ∀ e. TestSuite (testOutput ∷ Console.TESTOUTPUT | e)
 testSuite1 = do
   parseSucc """
+    a := 1; SELECT * FROM `/test`
+  """
+
+  parseSucc """
+    SELECT * FROM `/test`
+  """
+
+  parseSucc """
+    SELECT * FROM `/smallZips.json` WHERE city IS NOT "foo"
+  """
+
+  parseSucc """
+    SELECT * FROM `/smallZips.json` WHERE city IS NULL
+  """
+
+  parseSucc """
+    SELECT * FROM `/smallZips.json` WHERE city IS NOT NULL
+  """
+
+  parseSucc """
     select a from `/f` where b is not between 1 and (2..3)
   """
 
