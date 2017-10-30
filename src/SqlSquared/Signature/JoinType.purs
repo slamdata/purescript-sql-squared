@@ -2,11 +2,10 @@ module SqlSquared.Signature.JoinType where
 
 import Prelude
 
+import Control.Monad.Gen as Gen
 import Data.Argonaut as J
 import Data.Either (Either(..))
 import Data.NonEmpty ((:|))
-import Test.QuickCheck.Arbitrary as A
-import Test.QuickCheck.Gen as Gen
 
 data JoinType
   = LeftJoin
@@ -45,5 +44,5 @@ instance decodeJsonJoinType ∷ J.DecodeJson JoinType where
       $ Left "This is not join type"
     (obj J..? "value") >>= joinTypeFromString
 
-instance arbitraryJoinType ∷ A.Arbitrary JoinType where
-  arbitrary = Gen.elements $ LeftJoin :| [ RightJoin, InnerJoin, FullJoin ]
+genJoinType ∷ ∀ m. Gen.MonadGen m ⇒ m JoinType
+genJoinType = Gen.elements $ LeftJoin :| [ RightJoin, InnerJoin, FullJoin ]

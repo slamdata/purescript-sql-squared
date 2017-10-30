@@ -2,11 +2,10 @@ module SqlSquared.Signature.UnaryOperator where
 
 import Prelude
 
+import Control.Monad.Gen as Gen
 import Data.Argonaut as J
 import Data.Either (Either(..))
 import Data.NonEmpty ((:|))
-import Test.QuickCheck.Arbitrary as A
-import Test.QuickCheck.Gen as Gen
 
 data UnaryOperator
   = Not
@@ -75,8 +74,8 @@ instance decodeJsonUnaryOperator ∷ J.DecodeJson UnaryOperator where
       $ Left $ "This is not a unary operator " <> tag
     (obj J..? "value") >>= unopFromString
 
-instance arbitaryUnaryOperator ∷ A.Arbitrary UnaryOperator where
-  arbitrary =
+genUnaryOperator ∷ ∀ m. Gen.MonadGen m ⇒ m UnaryOperator
+genUnaryOperator =
     Gen.elements $ Not :|
       [ Exists, Positive, Negative, Distinct, FlattenMapKeys
       , FlattenMapValues, ShiftMapKeys, ShiftMapValues

@@ -2,11 +2,10 @@ module SqlSquared.Signature.BinaryOperator where
 
 import Prelude
 
+import Control.Monad.Gen as Gen
 import Data.Argonaut as J
 import Data.Either (Either(..))
 import Data.NonEmpty ((:|))
-import Test.QuickCheck.Arbitrary as A
-import Test.QuickCheck.Gen as Gen
 
 data BinaryOperator
   = IfUndefined
@@ -121,15 +120,15 @@ instance decodeJsonBinaryOperator ∷ J.DecodeJson BinaryOperator where
       $ Left "This is not a binary operator"
     (obj J..? "value") >>= binopFromString
 
-instance arbitraryBinaryOperator ∷ A.Arbitrary BinaryOperator where
-  arbitrary =
-    Gen.elements $ IfUndefined :|
-      [ Range, Or, And, Eq, Neq, Ge, Gt, Le, Lt
-      , Concat, Plus, Minus, Mult, Div, Mod, Pow
-      , In, FieldDeref, IndexDeref, Limit, Offset
-      , Sample, Union, UnionAll, Intersect
-      , IntersectAll, Except, UnshiftMap
-      ]
+genBinaryOperator ∷ ∀ m. Gen.MonadGen m ⇒ m BinaryOperator
+genBinaryOperator =
+  Gen.elements $ IfUndefined :|
+    [ Range, Or, And, Eq, Neq, Ge, Gt, Le, Lt
+    , Concat, Plus, Minus, Mult, Div, Mod, Pow
+    , In, FieldDeref, IndexDeref, Limit, Offset
+    , Sample, Union, UnionAll, Intersect
+    , IntersectAll, Except, UnshiftMap
+    ]
 
 printBinaryOperator ∷ String → String → BinaryOperator → String
 printBinaryOperator lhs rhs = case _ of
