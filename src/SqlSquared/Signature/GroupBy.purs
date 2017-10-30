@@ -2,18 +2,15 @@ module SqlSquared.Signature.GroupBy where
 
 import Prelude
 
+import Control.Monad.Gen as Gen
 import Data.Argonaut as J
 import Data.Either as E
 import Data.Foldable as F
-import Data.Traversable as T
 import Data.List as L
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype)
-
+import Data.Traversable as T
 import Matryoshka (Algebra, CoalgebraM)
-
-import Test.QuickCheck.Arbitrary as QC
-import Test.QuickCheck.Gen as Gen
 
 newtype GroupBy a = GroupBy { keys ∷ L.List a, having ∷ Maybe a }
 derive instance newtypeGroupBy ∷ Newtype (GroupBy a) _
@@ -50,12 +47,13 @@ decodeJsonGroupBy = J.decodeJson >=> \obj → do
   having ← obj J..? "having"
   pure $ GroupBy { keys, having }
 
-arbitraryGroupBy ∷ CoalgebraM Gen.Gen GroupBy Int
-arbitraryGroupBy n
+genGroupBy ∷ ∀ m. Gen.MonadGen m ⇒ CoalgebraM m GroupBy Int
+genGroupBy n
   | n == 0 = pure $ GroupBy { having: Nothing, keys: L.Nil }
   | otherwise = do
     len ← Gen.chooseInt 0 $ n - 1
-    nothing ← QC.arbitrary
-    pure $ GroupBy { having: if nothing then Nothing else Just $ n - 1
-                   , keys: map (const $ n - 1) $ L.range 0 len
-                   }
+    nothing ← Gen.chooseBool
+    pure $ GroupBy
+      { having: if nothing then Nothing else Just $ n - 1
+      , keys: map (const $ n - 1) $ L.range 0 len
+      }

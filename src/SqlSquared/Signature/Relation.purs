@@ -2,7 +2,9 @@ module SqlSquared.Signature.Relation where
 
 import Prelude
 
+import Control.Monad.Gen as Gen
 import Control.Monad.Gen.Common as GenC
+import Control.Monad.Rec.Class (class MonadRec)
 import Data.Argonaut as J
 import Data.Either (Either(..), either)
 import Data.Foldable as F
@@ -17,8 +19,6 @@ import Matryoshka (Algebra, CoalgebraM)
 import SqlSquared.Signature.Ident as ID
 import SqlSquared.Signature.JoinType as JT
 import SqlSquared.Utils ((∘))
-import Test.QuickCheck.Arbitrary as QC
-import Test.QuickCheck.Gen as Gen
 
 type JoinRelR a =
   { left ∷ Relation a
@@ -167,8 +167,8 @@ decodeJsonRelation = J.decodeJson >=> \obj → do
     joinType ← obj J..? "joinType"
     pure $ JoinRelation { left, right, clause, joinType }
 
-arbitraryRelation ∷ CoalgebraM Gen.Gen Relation Int
-arbitraryRelation n =
+genRelation ∷ ∀ m. Gen.MonadGen m ⇒ MonadRec m ⇒ CoalgebraM m Relation Int
+genRelation n =
   if n < 1
   then
     Gen.oneOf $ genTable :|
@@ -188,8 +188,8 @@ arbitraryRelation n =
   genTable = do
     let
       pathPart =
-        map (Int.toStringAs Int.hexadecimal) QC.arbitrary
-    dirs ← map Pt.dir <$> Gen.vectorOf n pathPart
+        map (Int.toStringAs Int.hexadecimal) (Gen.chooseInt 0 100000)
+    dirs ← map Pt.dir <$> Gen.resize (const n) (Gen.unfoldable pathPart ∷ m (Array String))
     fileName ← map Pt.file pathPart
     let
       path = Left $ Pt.rootDir Pt.</> F.foldl (\a b → b Pt.</> a) fileName dirs
@@ -199,7 +199,7 @@ arbitraryRelation n =
     aliasName ← GenS.genUnicodeString
     pure $ ExprRelation { aliasName, expr: n - 1 }
   genJoin = do
-    joinType ← QC.arbitrary
-    left ← arbitraryRelation $ n - 1
-    right ← arbitraryRelation $ n - 1
+    joinType ← JT.genJoinType
+    left ← genRelation $ n - 1
+    right ← genRelation $ n - 1
     pure $ JoinRelation { joinType, left, right, clause: n - 1 }

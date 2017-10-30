@@ -2,10 +2,9 @@ module SqlSquared.Signature.OrderType where
 
 import Prelude
 
+import Control.Monad.Gen as Gen
 import Data.Argonaut as J
 import Data.Either (Either(..))
-
-import Test.QuickCheck.Arbitrary as A
 
 data OrderType = ASC | DESC
 
@@ -36,5 +35,5 @@ instance decodeJsonOrderType ∷ J.DecodeJson OrderType where
       $ Left "This is not order type"
     (obj J..? "value") >>= orderTypeFromString
 
-instance arbitraryJoinType ∷ A.Arbitrary OrderType where
-  arbitrary = A.arbitrary <#> if _ then ASC else DESC
+genOrderType ∷ ∀ m. Gen.MonadGen m ⇒ m OrderType
+genOrderType = Gen.choose (pure ASC) (pure DESC)

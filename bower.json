@@ -21,13 +21,13 @@
     "purescript-profunctor": "^3.2.0",
     "purescript-profunctor-lenses": "^3.2.0",
     "purescript-ejson": "^10.0.1",
-    "purescript-argonaut-codecs": "^3.1.0",
-    "purescript-quickcheck": "^4.4.0"
+    "purescript-argonaut-codecs": "^3.1.0"
   },
   "devDependencies": {
     "purescript-argonaut": "^3.0.0",
-    "purescript-search": "^3.0.0",
     "purescript-debug": "^3.0.0",
+    "purescript-quickcheck": "^4.4.0",
+    "purescript-search": "^3.0.0",
     "purescript-test-unit": "^11.0.0"
   }
 }

@@ -43,7 +43,8 @@ module SqlSquared.Signature
 
 import Prelude
 
-import Control.Monad.Gen as MGen
+import Control.Monad.Gen as Gen
+import Control.Monad.Rec.Class (class MonadRec)
 import Data.Argonaut as J
 import Data.Array as A
 import Data.Either as E
@@ -74,8 +75,6 @@ import SqlSquared.Signature.Projection as PR
 import SqlSquared.Signature.Relation as RL
 import SqlSquared.Signature.UnaryOperator as UO
 import SqlSquared.Utils (type (×), (×), (∘), (⋙))
-import Test.QuickCheck.Arbitrary as QC
-import Test.QuickCheck.Gen as Gen
 
 type BinopR a =
   { lhs ∷ a
@@ -736,9 +735,11 @@ decodeJsonSqlModuleF = J.decodeJson >=> \obj → do
     _ → E.Left $ "Invalid top-level SQL^2 production: " <> tag
 
 arbitrarySqlF
-  ∷ ∀ l
-  . CoalgebraM Gen.Gen l Int
-  → CoalgebraM Gen.Gen (SqlF l) Int
+  ∷ ∀ m l
+  . Gen.MonadGen m
+  ⇒ MonadRec m
+  ⇒ CoalgebraM m l Int
+  → CoalgebraM m (SqlF l) Int
 arbitrarySqlF genLiteral n
   | n < 2 =
   Gen.oneOf $ (Literal <$> genLiteral n) :|
@@ -761,66 +762,66 @@ arbitrarySqlF genLiteral n
     , genSelect n
     ]
 
-arbitrarySqlDeclF ∷ CoalgebraM Gen.Gen SqlDeclF Int
+arbitrarySqlDeclF ∷ ∀ m. Gen.MonadGen m ⇒ CoalgebraM m SqlDeclF Int
 arbitrarySqlDeclF n =
   Gen.oneOf $ genImport :|
     [ genFunctionDecl n
     ]
 
-arbitrarySqlQueryF ∷ CoalgebraM Gen.Gen SqlQueryF Int
+arbitrarySqlQueryF ∷ ∀ m. Gen.MonadGen m ⇒ CoalgebraM m SqlQueryF Int
 arbitrarySqlQueryF n = Query <$> genDecls n <*> pure n
 
-arbitrarySqlModuleF ∷ CoalgebraM Gen.Gen SqlModuleF Int
+arbitrarySqlModuleF ∷ ∀ m. Gen.MonadGen m ⇒ CoalgebraM m SqlModuleF Int
 arbitrarySqlModuleF n = Module <$> genDecls n
 
-genSetLiteral ∷ ∀ l. CoalgebraM Gen.Gen (SqlF l) Int
+genSetLiteral ∷ ∀ m l. Gen.MonadGen m ⇒ CoalgebraM m (SqlF l) Int
 genSetLiteral n = do
   len ← Gen.chooseInt 0 $ n - 1
   pure $ SetLiteral $ map (const $ n - 1) $ L.range 0 len
 
-genBinop ∷ ∀ l. CoalgebraM Gen.Gen (SqlF l) Int
+genBinop ∷ ∀ m l. Gen.MonadGen m ⇒ CoalgebraM m (SqlF l) Int
 genBinop n = do
-  op ← QC.arbitrary
+  op ← BO.genBinaryOperator
   pure $ Binop { op, lhs: n - 1, rhs: n - 1 }
 
-genUnop ∷ ∀ l. CoalgebraM Gen.Gen (SqlF l) Int
+genUnop ∷ ∀ m l. Gen.MonadGen m ⇒ CoalgebraM m (SqlF l) Int
 genUnop n = do
-  op ← QC.arbitrary
+  op ← UO.genUnaryOperator
   pure $ Unop { op, expr: n - 1 }
 
-genInvokeFunction ∷ ∀ l. CoalgebraM Gen.Gen (SqlF l) Int
+genInvokeFunction ∷ ∀ m l. Gen.MonadGen m ⇒ CoalgebraM m (SqlF l) Int
 genInvokeFunction n = do
   name ← genIdent
   len ← Gen.chooseInt 0 $ n - 1
   pure $ InvokeFunction { name, args: map (const $ n - 1) $ L.range 0 len }
 
-genMatch ∷ ∀ l. CoalgebraM Gen.Gen (SqlF l) Int
+genMatch ∷ ∀ m l. Gen.MonadGen m ⇒ CoalgebraM m (SqlF l) Int
 genMatch n = do
-  nothing ← QC.arbitrary
+  nothing ← Gen.chooseBool
   len ← Gen.chooseInt 0 $ n - 1
   let
     foldFn acc _ = do
-      cs ← CS.arbitraryCase $ n - 1
+      cs ← CS.genCase $ n - 1
       pure $ cs L.: acc
   cases ← L.foldM foldFn L.Nil $ L.range 0 len
   pure $ Match { expr: n - 1
                , cases
                , else_: if nothing then Nothing else Just $ n - 1
                }
-genSwitch ∷ ∀ l. CoalgebraM Gen.Gen (SqlF l) Int
+genSwitch ∷ ∀ m l. Gen.MonadGen m ⇒ CoalgebraM m (SqlF l) Int
 genSwitch n = do
-  nothing ← QC.arbitrary
+  nothing ← Gen.chooseBool
   len ← Gen.chooseInt 0 $ n - 1
   let
     foldFn acc _ = do
-      cs ← CS.arbitraryCase $ n - 1
+      cs ← CS.genCase $ n - 1
       pure $ cs L.: acc
   cases ← L.foldM foldFn L.Nil $ L.range 0 len
   pure $ Switch { cases
                 , else_: if nothing then Nothing else Just $ n - 1
                 }
 
-genLet ∷ ∀ l. CoalgebraM Gen.Gen (SqlF l) Int
+genLet ∷ ∀ m l. Gen.MonadGen m ⇒ CoalgebraM m (SqlF l) Int
 genLet n = do
   ident ← genIdent
   pure $ Let { ident
@@ -828,18 +829,18 @@ genLet n = do
              , in_: n - 1
              }
 
-genSelect ∷ ∀ l. CoalgebraM Gen.Gen (SqlF l) Int
+genSelect ∷ ∀ m l. Gen.MonadGen m ⇒ MonadRec m ⇒ CoalgebraM m (SqlF l) Int
 genSelect n = do
   prjLen ← Gen.chooseInt 0 $ n - 1
-  mbRelation ← QC.arbitrary
-  mbFilter ← QC.arbitrary
-  mbGroupBy ← QC.arbitrary
-  mbOrderBy ← QC.arbitrary
-  isDistinct ← QC.arbitrary
+  mbRelation ← Gen.chooseBool
+  mbFilter ← Gen.chooseBool
+  mbGroupBy ← Gen.chooseBool
+  mbOrderBy ← Gen.chooseBool
+  isDistinct ← Gen.chooseBool
 
   let
     foldPrj acc _ = do
-      prj ← PR.arbitraryProjection $ n - 1
+      prj ← PR.genProjection $ n - 1
       pure $ prj L.:acc
   projections ←
     L.foldM foldPrj L.Nil $ L.range 0 prjLen
@@ -847,17 +848,17 @@ genSelect n = do
   relations ←
     if mbRelation
     then pure Nothing
-    else map Just $ RL.arbitraryRelation $ n - 1
+    else map Just $ RL.genRelation $ n - 1
 
   groupBy ←
     if mbGroupBy
     then pure Nothing
-    else map Just $ GB.arbitraryGroupBy $ n - 1
+    else map Just $ GB.genGroupBy $ n - 1
 
   orderBy ←
     if mbOrderBy
     then pure Nothing
-    else map Just $ OB.arbitraryOrderBy $ n - 1
+    else map Just $ OB.genOrderBy $ n - 1
 
   pure $ Select { isDistinct
                 , projections
@@ -867,7 +868,7 @@ genSelect n = do
                 , orderBy
                 }
 
-genFunctionDecl ∷ CoalgebraM Gen.Gen SqlDeclF Int
+genFunctionDecl ∷ ∀ m. Gen.MonadGen m ⇒ CoalgebraM m SqlDeclF Int
 genFunctionDecl n = do
   ident ← genIdent
   len ← Gen.chooseInt 0 $ n - 1
@@ -878,16 +879,16 @@ genFunctionDecl n = do
   args ← L.foldM foldFn L.Nil $ L.range 0 len
   pure $ FunctionDecl { ident, args, body: n - 1 }
 
-genImport ∷ ∀ a. Gen.Gen (SqlDeclF a)
+genImport ∷ ∀ m a. Gen.MonadGen m ⇒ m (SqlDeclF a)
 genImport = Import <$> genIdent
 
-genIdent ∷ Gen.Gen String
+genIdent ∷ ∀ m. Gen.MonadGen m ⇒ m String
 genIdent = do
   start ← Gen.elements $ "a" :| S.split (S.Pattern "") "bcdefghijklmnopqrstuvwxyz"
-  body ← map (Int.toStringAs Int.hexadecimal) QC.arbitrary
+  body ← map (Int.toStringAs Int.hexadecimal) (Gen.chooseInt 0 100000)
   pure $ start <> body
 
-genDecls ∷ Int → Gen.Gen (L.List (SqlDeclF Int))
+genDecls ∷ ∀ m. Gen.MonadGen m ⇒ Int → m (L.List (SqlDeclF Int))
 genDecls n = do
   let
     foldFn acc _ = do
@@ -901,32 +902,32 @@ genDecls n = do
 -- actually ported from quasar, this is very important
 -- but annoying stuff :|
 
-type GenSql t = Corecursive t (SqlF EJ.EJsonF) ⇒ Gen.Gen t
+type GenSql m t = Gen.MonadGen m ⇒ MonadRec m ⇒ Corecursive t (SqlF EJ.EJsonF) ⇒ m t
 
-genSql ∷ ∀ t. Int → GenSql t
+genSql ∷ ∀ m t. Int → GenSql m t
 genSql n
   | n < 2 = genLeaf
   | otherwise =
     Gen.oneOf $ genLetP (n - 1) :| [ genQueryExprP (n - 1) ]
 
-genLeaf ∷ ∀ t. GenSql t
+genLeaf ∷ ∀ m t. GenSql m t
 genLeaf =
   map (embed ∘ Literal)
-  $ MGen.oneOf $ pure EJ.Null :|
-    [ EJ.Boolean <$> MGen.chooseBool
-    , EJ.Integer <<< HI.fromInt <$> MGen.chooseInt (-1000000) 1000000
-    , EJ.Decimal <<< HN.fromNumber <$> MGen.chooseFloat (-1000000.0) 1000000.0
+  $ Gen.oneOf $ pure EJ.Null :|
+    [ EJ.Boolean <$> Gen.chooseBool
+    , EJ.Integer <<< HI.fromInt <$> Gen.chooseInt (-1000000) 1000000
+    , EJ.Decimal <<< HN.fromNumber <$> Gen.chooseFloat (-1000000.0) 1000000.0
     , EJ.String <$> GenS.genUnicodeString
     ]
 
-genLetP ∷ ∀ t. Int → GenSql t
+genLetP ∷ ∀ m t. Int → GenSql m t
 genLetP n = do
   ident ← genIdent
   bindTo ← genSql n
   in_ ← genSql n
   pure $ embed $ Let { ident, bindTo, in_ }
 
-genQueryExprP ∷ ∀ t. Int → GenSql t
+genQueryExprP ∷ ∀ m t. Int → GenSql m t
 genQueryExprP n
   | n < 2 = Gen.oneOf $ genQueryP n :| [ genDefinedExprP n ]
   | otherwise = do
@@ -940,12 +941,12 @@ genQueryExprP n
     rhs ← Gen.oneOf $ genQueryP n :| [ genDefinedExprP n ]
     pure $ embed $ Binop { op, lhs, rhs }
 
-genDefinedExprP ∷ ∀ t. Int → GenSql t
+genDefinedExprP ∷ ∀ m t. Int → GenSql m t
 genDefinedExprP n = do
-  binops ← Gen.vectorOf n QC.arbitrary
-  unops ← Gen.vectorOf n QC.arbitrary
+  binops ← Gen.resize (const n) $ Gen.unfoldable BO.genBinaryOperator
+  unops ← Gen.resize (const n) $ Gen.unfoldable UO.genUnaryOperator
   start ← genPrimaryExprP n
-  adds ← Gen.vectorOf n $ genPrimaryExprP n
+  adds ← Gen.resize (const n) $ Gen.unfoldable $ genPrimaryExprP n
   pure $ F.foldl foldFn start $ A.zip binops $ A.zip unops adds
   where
   foldFn acc (binop × unop × rhs) =
@@ -957,7 +958,7 @@ genDefinedExprP n = do
       , expr: embed $ Binop { lhs: acc, rhs, op:binop }
       }
 
-genPrimaryExprP ∷ ∀ t. Int → GenSql t
+genPrimaryExprP ∷ ∀ m t. Int → GenSql m t
 genPrimaryExprP n =
   Gen.oneOf $ genLeaf :|
     [ genCaseP n
@@ -970,26 +971,26 @@ genPrimaryExprP n =
     , map (embed ∘ Ident) genIdent
     ]
 
-genCaseP ∷ ∀ t. Int → GenSql t
+genCaseP ∷ ∀ m t. Int → GenSql m t
 genCaseP n = genLeaf
 
-genUnaryP ∷ ∀ t. Int → GenSql t
+genUnaryP ∷ ∀ m t. Int → GenSql m t
 genUnaryP n = genLeaf
 
-genFunctionP ∷ ∀ t. Int → GenSql t
+genFunctionP ∷ ∀ m t. Int → GenSql m t
 genFunctionP n = genLeaf
 
-genSetP ∷ ∀ t. Int → GenSql t
+genSetP ∷ ∀ m t. Int → GenSql m t
 genSetP n = genLeaf
 
-genArrayP ∷ ∀ t. Int → GenSql t
+genArrayP ∷ ∀ m t. Int → GenSql m t
 genArrayP n = genLeaf
 
-genMapP ∷ ∀ t. Int → GenSql t
+genMapP ∷ ∀ m t. Int → GenSql m t
 genMapP n = genLeaf
 
-genSpliceP ∷ ∀ t. Int → GenSql t
+genSpliceP ∷ ∀ m t. Int → GenSql m t
 genSpliceP n = pure $ embed $ Splice Nothing
 
-genQueryP ∷ ∀ t. Int → GenSql t
+genQueryP ∷ ∀ m t. Int → GenSql m t
 genQueryP n = genLeaf

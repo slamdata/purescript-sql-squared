@@ -2,18 +2,19 @@ module SqlSquared.Signature.Projection where
 
 import Prelude
 
+import Control.Monad.Gen as Gen
 import Control.Monad.Gen.Common as GenC
+import Control.Monad.Rec.Class (class MonadRec)
 import Data.Argonaut as J
 import Data.Either as E
 import Data.Foldable as F
-import Data.Traversable as T
 import Data.Maybe (Maybe)
 import Data.Newtype (class Newtype)
 import Data.String.Gen as GenS
+import Data.Traversable as T
 import Matryoshka (Algebra, CoalgebraM)
 import SqlSquared.Signature.Ident (printIdent)
 import SqlSquared.Utils ((∘))
-import Test.QuickCheck.Gen as Gen
 
 newtype Projection a = Projection { expr ∷ a, alias ∷ Maybe String }
 
@@ -21,10 +22,12 @@ derive instance functorProjection ∷ Functor Projection
 derive instance newtypeProjection ∷ Newtype (Projection a) _
 derive instance eqProjection ∷ Eq a ⇒ Eq (Projection a)
 derive instance ordProjection ∷ Ord a ⇒ Ord (Projection a)
+
 instance foldableProjection ∷ F.Foldable Projection where
   foldMap f (Projection { expr }) = f expr
   foldl f a (Projection { expr }) = f a expr
   foldr f a (Projection { expr }) = f expr a
+
 instance traversableProjection ∷ T.Traversable Projection where
   traverse f (Projection { expr, alias }) =
     map (Projection ∘ { expr: _, alias}) $ f expr
@@ -48,7 +51,7 @@ decodeJsonProjection = J.decodeJson >=> \obj → do
   alias ← obj J..? "alias"
   pure $ Projection { expr, alias }
 
-arbitraryProjection ∷ CoalgebraM Gen.Gen Projection Int
-arbitraryProjection n = do
+genProjection ∷ ∀ m. Gen.MonadGen m ⇒ MonadRec m ⇒ CoalgebraM m Projection Int
+genProjection n = do
   alias ← GenC.genMaybe GenS.genUnicodeString
   pure $ Projection { expr: n - 1, alias }
