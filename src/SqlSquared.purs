@@ -11,9 +11,9 @@ module SqlSquared
   , decodeJson
   , decodeJsonQuery
   , decodeJsonModule
-  , arbitrarySqlOfSize
-  , arbitrarySqlQueryOfSize
-  , arbitrarySqlModuleOfSize
+  , genSql
+  , genSqlQuery
+  , genSqlModule
   , module Sig
   , module Lenses
   , module Constructors
@@ -22,20 +22,18 @@ module SqlSquared
 
 import Prelude
 
+import Control.Monad.Gen as Gen
+import Control.Monad.Rec.Class (class MonadRec)
 import Data.Argonaut as J
 import Data.Either (Either)
 import Data.Functor.Mu (Mu)
 import Data.Json.Extended as EJ
 import Data.Traversable (traverse)
-
 import Matryoshka (cata, anaM)
-
-import SqlSquared.Signature as Sig
-import SqlSquared.Lenses as Lenses
 import SqlSquared.Constructors as Constructors
+import SqlSquared.Lenses as Lenses
 import SqlSquared.Parser as Parser
-
-import Test.QuickCheck.Gen as Gen
+import SqlSquared.Signature as Sig
 
 type Sql = Mu (Sig.SqlF EJ.EJsonF)
 
@@ -70,11 +68,13 @@ decodeJsonQuery = traverse decodeJson <=< Sig.decodeJsonSqlQueryF
 decodeJsonModule ∷ J.Json → Either String SqlModule
 decodeJsonModule = traverse decodeJson <=< Sig.decodeJsonSqlModuleF
 
-arbitrarySqlOfSize ∷ Int → Gen.Gen Sql
-arbitrarySqlOfSize = anaM $ Sig.arbitrarySqlF EJ.arbitraryEJsonF
+genSql ∷ ∀ m. Gen.MonadGen m ⇒ MonadRec m ⇒ m Sql
+genSql = Gen.sized $ anaM (Sig.genSqlF EJ.arbitraryEJsonF)
 
-arbitrarySqlQueryOfSize ∷ Int → Gen.Gen SqlQuery
-arbitrarySqlQueryOfSize = traverse arbitrarySqlOfSize <=< Sig.arbitrarySqlQueryF
+genSqlQuery ∷ ∀ m. Gen.MonadGen m ⇒ MonadRec m ⇒ m SqlQuery
+genSqlQuery =
+  Gen.sized $ traverse (flip Gen.resize genSql <<< const) <=< Sig.genSqlQueryF
 
-arbitrarySqlModuleOfSize ∷ Int → Gen.Gen SqlModule
-arbitrarySqlModuleOfSize = traverse arbitrarySqlOfSize <=< Sig.arbitrarySqlModuleF
+genSqlModule ∷ ∀ m. Gen.MonadGen m ⇒ MonadRec m ⇒ m SqlModule
+genSqlModule =
+  Gen.sized $ traverse (flip Gen.resize genSql <<< const) <=< Sig.genSqlModuleF

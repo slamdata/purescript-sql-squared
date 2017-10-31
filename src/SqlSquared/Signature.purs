@@ -23,11 +23,10 @@ module SqlSquared.Signature
   , decodeJsonSqlDeclF
   , decodeJsonSqlQueryF
   , decodeJsonSqlModuleF
-  , arbitrarySqlF
-  , arbitrarySqlDeclF
-  , arbitrarySqlQueryF
-  , arbitrarySqlModuleF
-  , genSql
+  , genSqlF
+  , genSqlDeclF
+  , genSqlQueryF
+  , genSqlModuleF
   , module SqlSquared.Utils
   , module OT
   , module JT
@@ -734,13 +733,13 @@ decodeJsonSqlModuleF = J.decodeJson >=> \obj → do
       pure $ Module decls
     _ → E.Left $ "Invalid top-level SQL^2 production: " <> tag
 
-arbitrarySqlF
+genSqlF
   ∷ ∀ m l
   . Gen.MonadGen m
   ⇒ MonadRec m
   ⇒ CoalgebraM m l Int
   → CoalgebraM m (SqlF l) Int
-arbitrarySqlF genLiteral n
+genSqlF genLiteral n
   | n < 2 =
   Gen.oneOf $ (Literal <$> genLiteral n) :|
     [ map Ident genIdent
@@ -762,17 +761,17 @@ arbitrarySqlF genLiteral n
     , genSelect n
     ]
 
-arbitrarySqlDeclF ∷ ∀ m. Gen.MonadGen m ⇒ CoalgebraM m SqlDeclF Int
-arbitrarySqlDeclF n =
+genSqlDeclF ∷ ∀ m. Gen.MonadGen m ⇒ CoalgebraM m SqlDeclF Int
+genSqlDeclF n =
   Gen.oneOf $ genImport :|
     [ genFunctionDecl n
     ]
 
-arbitrarySqlQueryF ∷ ∀ m. Gen.MonadGen m ⇒ CoalgebraM m SqlQueryF Int
-arbitrarySqlQueryF n = Query <$> genDecls n <*> pure n
+genSqlQueryF ∷ ∀ m. Gen.MonadGen m ⇒ CoalgebraM m SqlQueryF Int
+genSqlQueryF n = Query <$> genDecls n <*> pure n
 
-arbitrarySqlModuleF ∷ ∀ m. Gen.MonadGen m ⇒ CoalgebraM m SqlModuleF Int
-arbitrarySqlModuleF n = Module <$> genDecls n
+genSqlModuleF ∷ ∀ m. Gen.MonadGen m ⇒ CoalgebraM m SqlModuleF Int
+genSqlModuleF n = Module <$> genDecls n
 
 genSetLiteral ∷ ∀ m l. Gen.MonadGen m ⇒ CoalgebraM m (SqlF l) Int
 genSetLiteral n = do
@@ -892,7 +891,7 @@ genDecls ∷ ∀ m. Gen.MonadGen m ⇒ Int → m (L.List (SqlDeclF Int))
 genDecls n = do
   let
     foldFn acc _ = do
-      cs ← arbitrarySqlDeclF $ n - 1
+      cs ← genSqlDeclF $ n - 1
       pure $ cs L.: acc
   len ← Gen.chooseInt 0 $ n - 1
   L.foldM foldFn L.Nil $ L.range 0 len
