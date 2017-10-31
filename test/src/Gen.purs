@@ -6,8 +6,9 @@ import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Console (CONSOLE)
 import Control.Monad.Eff.Exception (EXCEPTION)
 import Control.Monad.Eff.Random (RANDOM)
+import Control.Monad.Gen as Gen
 import Data.Either as E
-import SqlSquared (SqlQuery, arbitrarySqlQueryOfSize, decodeJsonQuery, encodeJsonQuery, printQuery, tokenize)
+import SqlSquared (SqlQuery, genSqlQuery, decodeJsonQuery, encodeJsonQuery, printQuery, tokenize)
 import Test.QuickCheck ((<?>))
 import Test.QuickCheck as QC
 import Test.QuickCheck.Arbitrary as A
@@ -16,7 +17,7 @@ import Test.Unit.Console as Console
 newtype ArbSql = ArbSql SqlQuery
 
 instance arbitraryArbSql ∷ A.Arbitrary ArbSql where
-  arbitrary = map ArbSql $ arbitrarySqlQueryOfSize 3
+  arbitrary = map ArbSql $ Gen.resize (const 3) genSqlQuery
 
 newtype ParseableSql = ParseableSql SqlQuery
 
