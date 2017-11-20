@@ -614,7 +614,7 @@ stdJoinRelation = do
       }
   where
   joinTypes = PC.choice
-    [ keyword "letf" *> PC.optional (keyword "outer") $> Sig.LeftJoin
+    [ keyword "left" *> PC.optional (keyword "outer") $> Sig.LeftJoin
     , keyword "right" *> PC.optional (keyword "outer") $> Sig.RightJoin
     , PC.try $ PC.optional (keyword "full") *> keyword "outer" $> Sig.FullJoin
     , keyword "full" $> Sig.FullJoin
