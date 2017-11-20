@@ -927,3 +927,6 @@ testSuite6 = do
   parseSucc Q.q19
   parseSucc Q.q20
   parseSucc Q.q21
+  parseSucc Q.q22
+  parseSucc Q.q23
+  parseSucc Q.q24

@@ -559,9 +559,14 @@ simpleRelation =
   tableRelation
   <|> variRelation
   <|> exprRelation
+  <|> do
+    _ ← operator "("
+    r ← relation
+    _ ← operator ")"
+    pure r
 
 tableRelation ∷ ∀ m t. SqlParser m t (Sig.Relation t)
-tableRelation = do
+tableRelation = PC.try do
   i ← ident
   path ←
     Pt.parsePath
@@ -577,7 +582,7 @@ tableRelation = do
 
 
 variRelation ∷ ∀ m t. SqlParser m t (Sig.Relation t)
-variRelation = do
+variRelation = PC.try do
   vari ← variableString
   a ← PC.optionMaybe do
     _ ← keyword "as"
@@ -585,7 +590,7 @@ variRelation = do
   pure $ Sig.VariRelation { alias: a, vari }
 
 exprRelation ∷ ∀ m t. SqlParser m t (Sig.Relation t)
-exprRelation = do
+exprRelation = PC.try do
   operator "("
   e ← expr
   operator ")"
@@ -594,7 +599,7 @@ exprRelation = do
   pure $ Sig.ExprRelation { aliasName: i, expr: e }
 
 stdJoinRelation ∷ ∀ m t. SqlParser m t (Sig.Relation t → Sig.Relation t)
-stdJoinRelation = do
+stdJoinRelation = PC.try do
   joinType ← joinTypes
   _ ← keyword "join"
   right ← simpleRelation
