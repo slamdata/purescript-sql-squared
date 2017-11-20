@@ -599,7 +599,7 @@ exprRelation = PC.try do
   pure $ Sig.ExprRelation { aliasName: i, expr: e }
 
 stdJoinRelation ∷ ∀ m t. SqlParser m t (Sig.Relation t → Sig.Relation t)
-stdJoinRelation = PC.try do
+stdJoinRelation = do
   joinType ← joinTypes
   _ ← keyword "join"
   right ← simpleRelation
@@ -614,7 +614,7 @@ stdJoinRelation = PC.try do
       }
   where
   joinTypes = PC.choice
-    [ keyword "left" *> PC.optional (keyword "outer") $> Sig.LeftJoin
+    [ keyword "letf" *> PC.optional (keyword "outer") $> Sig.LeftJoin
     , keyword "right" *> PC.optional (keyword "outer") $> Sig.RightJoin
     , PC.try $ PC.optional (keyword "full") *> keyword "outer" $> Sig.FullJoin
     , keyword "full" $> Sig.FullJoin
