@@ -681,3 +681,85 @@ group by
 order by
   cntrycode
 """
+
+q22 ∷ String
+q22 = """
+select clientdetails.name as name, clientdetails.surname as surname, clientdetails.email as email,
+raw.txType as txType, raw.currency as currency, sum(raw.amount) as amount, count(raw.*) as cnt from
+(
+
+select distinct
+clientdetails.clientID as clientID, transactions.dateTime as dateTime, (transactions).amount as amount, (transactions).currency as currency, (transactions).txType as txType
+from
+`/ourcustomer/employeepositions` as employeepositions inner join
+`/ourcustomer/locationpositions` as locationpositions on employeepositions.locPosID = locationpositions.`_id` inner join
+`/ourcustomer/locations` as locations on locationpositions.locID = locations.`_id` inner join
+`/ourcustomer/transactions` as transactions on transactions.clientID = employeepositions.clientID inner join
+`/ourcustomer/clientdetails` as clientdetails on clientdetails.clientID = transactions.clientID
+where locations.hideFromKpi <> true
+and transactions.txType in (10, 20, 30, 40, 50, 60, 100, 110)
+and transactions.dateTime >= "2017-10-01T00:00:00.000Z"
+and transactions.dateTime < "2017-11-15T23:59:59.999Z"
+)
+as raw
+inner join `/ourcustomer/clientdetails` as clientdetails on clientdetails.clientID = raw.clientID
+group by clientdetails.email, clientdetails.name, clientdetails.surname, raw.txType, raw.currency
+"""
+
+q23 ∷ String
+q23 = """
+select distinct transactions.clientID, transactions.currency
+from ( ( ( `/ourcustomer/employeepositions` as employeepositions inner join `/ourcustomer/locationpositions` as locationpositions on (((employeepositions).locPosID) = ((locationpositions).`_id`)) )
+inner join `/ourcustomer/locations` as locations on (((locationpositions).locID) = ((locations).`_id`)) )
+inner join `/ourcustomer/transactions` as transactions on (((transactions).clientID) = ((employeepositions).clientID)) )
+where (((locations).hideFromKpi) <> (true))
+and transactions.txType in (50,60,100,110)
+and transactions.datenumber > 20170911
+"""
+
+q24 ∷ String
+q24 = """
+select total.locations_name as `Location`, total.country as `Country`,
+ip.amount as `OurCustomer Pay`,
+pay.amount as `Balance of Pay`,
+tips.amount as `Tips`,
+dailyTips.amount as `Daily Tips`,
+other.amount as `Other`,
+total.amount as `Total` from
+
+(
+
+(SELECT sum(amount) as amount, country, locations_id, locations_name from `/work/view_mandeep` where dateTime >= :start and dateTime <= :end group by locations_id, locations_name, country) as total
+
+left join
+
+(SELECT sum(amount) as amount, locations_id from `/work/view_mandeep` where txType = 10 and dateTime >= :start and dateTime <= :end group by locations_id) as ip
+
+on total.locations_id = ip.locations_id
+
+left join
+
+(SELECT sum(amount) as amount, locations_id from `/work/view_mandeep` where txType = 20 and dateTime >= :start and dateTime <= :end group by locations_id) as pay
+
+on pay.locations_id = total.locations_id
+
+left join
+
+(SELECT sum(amount) as amount, locations_id from `/work/view_mandeep` where txType = 30 and payTipsDaily != true and dateTime >= :start and dateTime <= :end group by locations_id) as tips
+
+on tips.locations_id = total.locations_id
+
+left join
+
+(SELECT sum(amount) as amount, locations_id from `/work/view_mandeep` where txType = 30 and payTipsDaily = true and dateTime >= :start and dateTime <= :end group by locations_id) as dailyTips
+
+on dailyTips.locations_id = total.locations_id
+
+left join
+
+(SELECT sum(amount) as amount, locations_id from `/work/view_mandeep` where txType = 40 and dateTime >= :start and dateTime <= :end group by locations_id) as other
+
+on other.locations_id = total.locations_id
+
+)
+"""
