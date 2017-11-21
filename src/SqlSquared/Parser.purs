@@ -558,7 +558,7 @@ simpleRelation ∷ ∀ m t. SqlParser m t (Sig.Relation t)
 simpleRelation =
   tableRelation
   <|> variRelation
-  <|> exprRelation
+  <|> PC.try exprRelation
   <|> parenRelation
 
 parenRelation ∷ ∀ m t. SqlParser m t (Sig.Relation t)
@@ -592,7 +592,7 @@ variRelation = do
   pure $ Sig.VariRelation { alias: a, vari }
 
 exprRelation ∷ ∀ m t. SqlParser m t (Sig.Relation t)
-exprRelation = PC.try do
+exprRelation = do
   operator "("
   e ← expr
   operator ")"
