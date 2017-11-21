@@ -559,14 +559,17 @@ simpleRelation =
   tableRelation
   <|> variRelation
   <|> exprRelation
-  <|> do
-    _ ← operator "("
-    r ← relation
-    _ ← operator ")"
-    pure r
+  <|> parenRelation
+
+parenRelation ∷ ∀ m t. SqlParser m t (Sig.Relation t)
+parenRelation = do
+  _ ← operator "("
+  r ← relation
+  _ ← operator ")"
+  pure r
 
 tableRelation ∷ ∀ m t. SqlParser m t (Sig.Relation t)
-tableRelation = PC.try do
+tableRelation = do
   i ← ident
   path ←
     Pt.parsePath
@@ -580,9 +583,8 @@ tableRelation = PC.try do
     ident
   pure $ Sig.TableRelation { alias: a, path }
 
-
 variRelation ∷ ∀ m t. SqlParser m t (Sig.Relation t)
-variRelation = PC.try do
+variRelation = do
   vari ← variableString
   a ← PC.optionMaybe do
     _ ← keyword "as"
