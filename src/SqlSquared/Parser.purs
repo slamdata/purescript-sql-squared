@@ -412,7 +412,8 @@ import_
 import_ = asErrorMessage "import declaration" do
   _ ← keyword "import"
   s ← ident
-  pure $ Sig.Import s
+  path ← Sig.parseAnyDirPath P.fail s
+  pure $ Sig.Import path
 
 variable ∷ ∀ m t. SqlParser' m t
 variable = C.vari <$> variableString

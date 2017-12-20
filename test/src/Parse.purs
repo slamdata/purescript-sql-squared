@@ -40,6 +40,25 @@ parseFail s =
     E.Left err → pure unit
     E.Right (sql ∷ SqlQuery) → Assert.assert s false
 
+parseFailWith ∷ ∀ e. String → String → TestSuite (testOutput ∷ Console.TESTOUTPUT | e)
+parseFailWith s err =
+  test "parse/failWith"
+  case parseQuery s of
+    E.Left err' →
+      if show err' == err
+        then pure unit
+        else Assert.assert
+          ("expected query:" <> s <>
+          "\n\n  to fail input error:   " <> err <>
+          "\n\n  but instead fot error: " <> show err')
+          false
+    E.Right (sql ∷ SqlQuery) →
+      Assert.assert
+        ("expected to fail with:" <> err <>
+        "\n\tbut input query:" <> s <>
+        "\n\twas parsed as:" <> printQuery sql)
+        false
+
 testSuite ∷ ∀ e. TestSuite (testOutput ∷ Console.TESTOUTPUT | e)
 testSuite = suite "parsers" do
   testSuite1
@@ -51,6 +70,14 @@ testSuite = suite "parsers" do
 
 testSuite1 ∷ ∀ e. TestSuite (testOutput ∷ Console.TESTOUTPUT | e)
 testSuite1 = do
+  parseFailWith """
+    import `/path/To/Your/File/myModule`; SELECT id("HELLO")
+  """ "(ParseError \"incorrect directory path\" (Position { line: 2, column: 12 }))"
+
+  parseSucc """
+    import `/path/To/Your/File/myModule/`; SELECT id("HELLO")
+  """
+
   parseSucc """
     a := 1; SELECT * FROM `/test`
   """
@@ -157,6 +184,10 @@ testSuite1 = do
   """
 
   parseSucc """
+    import `foo/`; select * from `/test`
+  """
+
+  parseFail """
     import foo; select * from `/test`
   """
 
