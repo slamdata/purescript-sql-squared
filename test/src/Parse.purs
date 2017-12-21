@@ -72,7 +72,7 @@ testSuite1 ∷ ∀ e. TestSuite (testOutput ∷ Console.TESTOUTPUT | e)
 testSuite1 = do
   parseFailWith """
     import `/path/To/Your/File/myModule`; SELECT id("HELLO")
-  """ "(ParseError \"incorrect directory path\" (Position { line: 2, column: 12 }))"
+  """ "(ParseError \"Expected a directory path\" (Position { line: 2, column: 12 }))"
 
   parseSucc """
     import `/path/To/Your/File/myModule/`; SELECT id("HELLO")

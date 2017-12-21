@@ -11,8 +11,6 @@ module SqlSquared.Signature
   , SqlDeclF(..)
   , SqlQueryF(..)
   , SqlModuleF(..)
-  , AnyDirPath
-  , parseAnyDirPath
   , printSqlF
   , printSqlDeclF
   , printSqlQueryF
@@ -60,13 +58,12 @@ import Data.Maybe (Maybe(..))
 import Data.Monoid (mempty)
 import Data.Newtype (class Newtype)
 import Data.NonEmpty ((:|))
-import Data.Path.Pathy as Pt
-import Data.Path.Pathy.Gen as PtGen
 import Data.Ord (class Ord1, compare1)
 import Data.String as S
 import Data.String.Gen as GenS
 import Data.Traversable as T
 import Matryoshka (Algebra, CoalgebraM, class Corecursive, embed)
+import SqlSquared.Path as Pt
 import SqlSquared.Signature.BinaryOperator as BO
 import SqlSquared.Signature.Case as CS
 import SqlSquared.Signature.GroupBy as GB
@@ -142,20 +139,8 @@ data SqlF literal a
   | Select (SelectR a)
   | Parens a
 
-type AnyDirPath = E.Either (Pt.AbsDir Pt.Unsandboxed) (Pt.RelDir Pt.Unsandboxed)
-
-printAnyDirPath :: AnyDirPath -> String
-printAnyDirPath = E.either Pt.unsafePrintPath Pt.unsafePrintPath
-
-parseAnyDirPath :: forall m. Applicative m => (forall a. String -> m a) -> String -> m AnyDirPath
-parseAnyDirPath fail = Pt.parsePath
-  (pure ∘ E.Right)
-  (pure ∘ E.Left)
-  (const $ fail "incorrect directory path")
-  (const $ fail "incorrect directory path")
-
 data SqlDeclF a
-  = Import AnyDirPath
+  = Import Pt.AnyDirPath
   | FunctionDecl (FunctionDeclR a)
 
 newtype SqlModuleF a =
@@ -519,7 +504,7 @@ printSqlDeclF = case _ of
     <> body
     <> " END"
   Import path →
-    "IMPORT " <> ID.printIdent (printAnyDirPath path)
+    "IMPORT " <> ID.printIdent (Pt.printAnyDirPath path)
 
 printSqlQueryF ∷ Algebra SqlQueryF String
 printSqlQueryF (Query decls expr) = F.intercalate "; " $ L.snoc (printSqlDeclF <$> decls) expr
@@ -606,7 +591,7 @@ encodeJsonSqlDeclF = case _ of
     J.~> J.jsonEmptyObject
   Import path →
     "tag" J.:= "import"
-    J.~> "value" J.:= printAnyDirPath path
+    J.~> "value" J.:= Pt.printAnyDirPath path
     J.~> J.jsonEmptyObject
 
 encodeJsonSqlQueryF ∷ Algebra SqlQueryF J.Json
@@ -728,7 +713,7 @@ decodeJsonSqlDeclF = J.decodeJson >=> \obj → do
 
   decodeImport obj = do
     v ← obj J..? "value"
-    path ← parseAnyDirPath E.Left v
+    path ← Pt.parseAnyDirPath E.Left v
     pure $ Import path
 
 decodeJsonSqlQueryF ∷ CoalgebraM (E.Either String) SqlQueryF J.Json
@@ -896,10 +881,7 @@ genFunctionDecl n = do
   pure $ FunctionDecl { ident, args, body: n - 1 }
 
 genImport ∷ ∀ m a. Gen.MonadGen m ⇒ MonadRec m ⇒ m (SqlDeclF a)
-genImport = map Import
-  $ Gen.oneOf
-  $ (Pt.unsandbox >>> E.Left <$> PtGen.genAbsDirPath)
-  :| [Pt.unsandbox >>> E.Right <$> PtGen.genRelDirPath]
+genImport = map Import Pt.genAnyDirPath
 
 genIdent ∷ ∀ m. Gen.MonadGen m ⇒ m String
 genIdent = do
