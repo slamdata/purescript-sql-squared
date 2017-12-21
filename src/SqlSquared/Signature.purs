@@ -63,6 +63,7 @@ import Data.String as S
 import Data.String.Gen as GenS
 import Data.Traversable as T
 import Matryoshka (Algebra, CoalgebraM, class Corecursive, embed)
+import SqlSquared.Path as Pt
 import SqlSquared.Signature.BinaryOperator as BO
 import SqlSquared.Signature.Case as CS
 import SqlSquared.Signature.GroupBy as GB
@@ -139,7 +140,7 @@ data SqlF literal a
   | Parens a
 
 data SqlDeclF a
-  = Import String
+  = Import Pt.AnyDirPath
   | FunctionDecl (FunctionDeclR a)
 
 newtype SqlModuleF a =
@@ -502,8 +503,8 @@ printSqlDeclF = case _ of
     <> "(" <> F.intercalate ", " (append ":" ∘ ID.printIdent <$> args) <> ") BEGIN "
     <> body
     <> " END"
-  Import s →
-    "IMPORT " <> ID.printIdent s
+  Import path →
+    "IMPORT " <> ID.printIdent (Pt.printAnyDirPath path)
 
 printSqlQueryF ∷ Algebra SqlQueryF String
 printSqlQueryF (Query decls expr) = F.intercalate "; " $ L.snoc (printSqlDeclF <$> decls) expr
@@ -588,9 +589,9 @@ encodeJsonSqlDeclF = case _ of
     J.~> "args" J.:= args
     J.~> "body" J.:= body
     J.~> J.jsonEmptyObject
-  Import s →
+  Import path →
     "tag" J.:= "import"
-    J.~> "value" J.:= s
+    J.~> "value" J.:= Pt.printAnyDirPath path
     J.~> J.jsonEmptyObject
 
 encodeJsonSqlQueryF ∷ Algebra SqlQueryF J.Json
@@ -712,7 +713,8 @@ decodeJsonSqlDeclF = J.decodeJson >=> \obj → do
 
   decodeImport obj = do
     v ← obj J..? "value"
-    pure $ Import v
+    path ← Pt.parseAnyDirPath E.Left v
+    pure $ Import path
 
 decodeJsonSqlQueryF ∷ CoalgebraM (E.Either String) SqlQueryF J.Json
 decodeJsonSqlQueryF = J.decodeJson >=> \obj → do
@@ -761,16 +763,16 @@ genSqlF genLiteral n
     , genSelect n
     ]
 
-genSqlDeclF ∷ ∀ m. Gen.MonadGen m ⇒ CoalgebraM m SqlDeclF Int
+genSqlDeclF ∷ ∀ m. Gen.MonadGen m ⇒ MonadRec m ⇒ CoalgebraM m SqlDeclF Int
 genSqlDeclF n =
   Gen.oneOf $ genImport :|
     [ genFunctionDecl n
     ]
 
-genSqlQueryF ∷ ∀ m. Gen.MonadGen m ⇒ CoalgebraM m SqlQueryF Int
+genSqlQueryF ∷ ∀ m. Gen.MonadGen m ⇒ MonadRec m ⇒ CoalgebraM m SqlQueryF Int
 genSqlQueryF n = Query <$> genDecls n <*> pure n
 
-genSqlModuleF ∷ ∀ m. Gen.MonadGen m ⇒ CoalgebraM m SqlModuleF Int
+genSqlModuleF ∷ ∀ m. Gen.MonadGen m ⇒ MonadRec m ⇒ CoalgebraM m SqlModuleF Int
 genSqlModuleF n = Module <$> genDecls n
 
 genSetLiteral ∷ ∀ m l. Gen.MonadGen m ⇒ CoalgebraM m (SqlF l) Int
@@ -878,8 +880,8 @@ genFunctionDecl n = do
   args ← L.foldM foldFn L.Nil $ L.range 0 len
   pure $ FunctionDecl { ident, args, body: n - 1 }
 
-genImport ∷ ∀ m a. Gen.MonadGen m ⇒ m (SqlDeclF a)
-genImport = Import <$> genIdent
+genImport ∷ ∀ m a. Gen.MonadGen m ⇒ MonadRec m ⇒ m (SqlDeclF a)
+genImport = map Import Pt.genAnyDirPath
 
 genIdent ∷ ∀ m. Gen.MonadGen m ⇒ m String
 genIdent = do
@@ -887,7 +889,7 @@ genIdent = do
   body ← map (Int.toStringAs Int.hexadecimal) (Gen.chooseInt 0 100000)
   pure $ start <> body
 
-genDecls ∷ ∀ m. Gen.MonadGen m ⇒ Int → m (L.List (SqlDeclF Int))
+genDecls ∷ ∀ m. Gen.MonadGen m ⇒ MonadRec m ⇒ Int → m (L.List (SqlDeclF Int))
 genDecls n = do
   let
     foldFn acc _ = do

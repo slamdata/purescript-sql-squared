@@ -6,20 +6,18 @@ import Control.Monad.Gen as Gen
 import Control.Monad.Gen.Common as GenC
 import Control.Monad.Rec.Class (class MonadRec)
 import Data.Argonaut as J
-import Data.Either (Either(..), either)
+import Data.Either (Either(..))
 import Data.Foldable as F
-import Data.Int as Int
 import Data.Maybe (Maybe)
 import Data.Monoid (mempty)
 import Data.NonEmpty ((:|))
-import Data.Path.Pathy as Pt
 import Data.String.Gen as GenS
 import Data.Traversable as T
 import Matryoshka (Algebra, CoalgebraM)
+import SqlSquared.Path as Pt
 import SqlSquared.Signature.Ident as ID
 import SqlSquared.Signature.JoinType as JT
 import SqlSquared.Utils ((∘))
-
 type JoinRelR a =
   { left ∷ Relation a
   , right ∷ Relation a
@@ -38,7 +36,7 @@ type VariRelR =
   }
 
 type TableRelR =
-  { path ∷ Either (Pt.AbsFile Pt.Unsandboxed) (Pt.RelFile Pt.Unsandboxed)
+  { path ∷ Pt.AnyFilePath
   , alias ∷ Maybe String
   }
 
@@ -91,7 +89,7 @@ printRelation = case _ of
     ":" <> ID.printIdent vari <> F.foldMap (\a → " AS " <> ID.printIdent a) alias
   TableRelation { path, alias } →
     "`"
-    <> either Pt.unsafePrintPath Pt.unsafePrintPath path
+    <> Pt.printAnyFilePath path
     <> "`"
     <> F.foldMap (\x → " AS " <> ID.printIdent x) alias
   JoinRelation { left, right, joinType, clause } →
@@ -117,7 +115,7 @@ encodeJsonRelation = case _ of
     J.~> J.jsonEmptyObject
   TableRelation { path, alias } →
     "tag" J.:= "table relation"
-    J.~> "path" J.:= either Pt.unsafePrintPath Pt.unsafePrintPath path
+    J.~> "path" J.:= Pt.printAnyFilePath path
     J.~> "alias" J.:= alias
     J.~> J.jsonEmptyObject
   JoinRelation { left, right, joinType, clause } →
@@ -150,13 +148,7 @@ decodeJsonRelation = J.decodeJson >=> \obj → do
 
   decodeTableRelation obj = do
     pathStr ← obj J..? "path"
-    path ←
-      Pt.parsePath
-        (const $ Left "incorrect path")
-        (const $ Left "incorrect path")
-        (Right ∘ Right)
-        (Right ∘ Left)
-        pathStr
+    path ← Pt.parseAnyFilePath Left pathStr
     alias ← obj J..? "alias"
     pure $ TableRelation { path, alias }
 
@@ -186,13 +178,7 @@ genRelation n =
     alias ← GenC.genMaybe GenS.genUnicodeString
     pure $ VariRelation { vari, alias }
   genTable = do
-    let
-      pathPart =
-        map (Int.toStringAs Int.hexadecimal) (Gen.chooseInt 0 100000)
-    dirs ← map Pt.dir <$> Gen.resize (const n) (Gen.unfoldable pathPart ∷ m (Array String))
-    fileName ← map Pt.file pathPart
-    let
-      path = Left $ Pt.rootDir Pt.</> F.foldl (\a b → b Pt.</> a) fileName dirs
+    path ← Pt.genAnyFilePath
     alias ← GenC.genMaybe GenS.genUnicodeString
     pure $ TableRelation { path, alias }
   genExpr = do

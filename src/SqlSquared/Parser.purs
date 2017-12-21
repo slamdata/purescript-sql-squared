@@ -24,7 +24,7 @@ import Data.Maybe (Maybe(..), fromMaybe, isJust)
 import Data.NonEmpty ((:|))
 import Data.Json.Extended as EJ
 import Data.Tuple (Tuple(..), uncurry)
-import Data.Path.Pathy as Pt
+import SqlSquared.Path as Pt
 import Data.String as S
 
 import SqlSquared.Constructors as C
@@ -412,7 +412,8 @@ import_
 import_ = asErrorMessage "import declaration" do
   _ ← keyword "import"
   s ← ident
-  pure $ Sig.Import s
+  path ← Pt.parseAnyDirPath P.fail s
+  pure $ Sig.Import path
 
 variable ∷ ∀ m t. SqlParser' m t
 variable = C.vari <$> variableString
@@ -571,13 +572,7 @@ parenRelation = do
 tableRelation ∷ ∀ m t. SqlParser m t (Sig.Relation t)
 tableRelation = do
   i ← ident
-  path ←
-    Pt.parsePath
-      (const $ P.fail "incorrect path")
-      (const $ P.fail "incorrect path")
-      (pure ∘ E.Right)
-      (pure ∘ E.Left)
-      i
+  path ← Pt.parseAnyFilePath P.fail i
   a ← PC.optionMaybe do
     _ ← keyword "as"
     ident
