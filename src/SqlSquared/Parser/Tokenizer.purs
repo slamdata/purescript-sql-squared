@@ -220,7 +220,7 @@ quotedIdent =
 
 notQuotedIdentOrKeyword ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
 notQuotedIdentOrKeyword = do
-  first ← PT.letter
+  first ← PT.letter <|> PS.char '_'
   other ← A.many (PT.alphaNum <|> PS.char '_')
   let
     str = S.fromCharArray $ A.cons first other
