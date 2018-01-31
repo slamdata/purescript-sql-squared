@@ -15,6 +15,7 @@ import Test.Constructors as Constructors
 import Test.Argonaut as Argonaut
 import Test.Gen as Gen
 import Test.Parse as Parse
+import Test.Precedence as Precedence
 
 type Effects =
   ( testOutput ∷ TESTOUTPUT
@@ -30,5 +31,6 @@ main = do
     Constructors.testSuite
     Argonaut.testSuite
     Parse.testSuite
+    Precedence.testSuite
 
   Gen.test
