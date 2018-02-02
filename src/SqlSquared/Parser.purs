@@ -601,7 +601,7 @@ stdJoinRelation = do
   _ ← keyword "join"
   right ← simpleRelation
   _ ← keyword "on"
-  clause ← expr
+  clause ← definedExpr
   pure \left →
     Sig.JoinRelation
       { left
