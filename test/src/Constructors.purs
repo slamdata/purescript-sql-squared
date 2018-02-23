@@ -2,16 +2,15 @@ module Test.Constructors where
 
 import Prelude
 
-import Data.List as L
+import Data.Either as E
 import Data.Lens ((.~), (<>~), (?~))
+import Data.List as L
 import Data.Maybe (Maybe(..))
 import Data.NonEmpty as NE
-import Data.Either as E
-import Data.Path.Pathy as Pt
-
+import Data.Symbol (SProxy(..))
+import Pathy as Pt
 import SqlSquared as S
 import SqlSquared.Utils ((×), (∘))
-
 import Test.Unit (suite, test, TestSuite)
 import Test.Unit.Assert as Assert
 
@@ -26,9 +25,9 @@ selectQuery =
         { alias: Nothing
         , path: E.Left
           $ Pt.rootDir
-          Pt.</> Pt.dir "mongo"
-          Pt.</> Pt.dir "testDb"
-          Pt.</> Pt.file "patients"
+          Pt.</> Pt.dir (SProxy :: SProxy "mongo")
+          Pt.</> Pt.dir (SProxy :: SProxy "testDb")
+          Pt.</> Pt.file (SProxy :: SProxy "patients")
         })
     ( Just $ S.binop S.Eq (S.ident "quux") (S.num 12.0) )
     ( Just $ S.groupBy [ S.ident "zzz" ] # S.having ( S.binop S.Gt (S.ident "ooo") ( S.int 2)) )
@@ -53,9 +52,9 @@ buildSelectQuery =
            { alias: Nothing
            , path: E.Left
              $ Pt.rootDir
-             Pt.</> Pt.dir "mongo"
-             Pt.</> Pt.dir "testDb"
-             Pt.</> Pt.file "patients"
+             Pt.</> Pt.dir (SProxy :: SProxy "mongo")
+             Pt.</> Pt.dir (SProxy :: SProxy "testDb")
+             Pt.</> Pt.file (SProxy :: SProxy "patients")
            }))
 
     ∘ (S._filter ?~ S.binop S.Eq (S.ident "quux") (S.num 12.0))
