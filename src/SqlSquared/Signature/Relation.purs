@@ -36,7 +36,7 @@ type VariRelR =
   }
 
 type TableRelR =
-  { path ∷ Pt.AnyFilePath
+  { path ∷ Pt.AnyFile
   , alias ∷ Maybe String
   }
 
