@@ -140,7 +140,7 @@ data SqlF literal a
   | Parens a
 
 data SqlDeclF a
-  = Import Pt.AnyDirPath
+  = Import Pt.AnyDir
   | FunctionDecl (FunctionDeclR a)
 
 newtype SqlModuleF a =
