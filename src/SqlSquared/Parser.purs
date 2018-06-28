@@ -13,26 +13,24 @@ import Control.Lazy (defer)
 import Control.Monad.Error.Class (catchError)
 import Control.Monad.State (get, put)
 import Control.MonadZero (guard)
-
 import Data.Array as A
 import Data.Bifunctor (lmap)
 import Data.Either as E
 import Data.Foldable as F
+import Data.Json.Extended as EJ
 import Data.List ((:))
 import Data.List as L
 import Data.Maybe (Maybe(..), fromMaybe, isJust)
 import Data.NonEmpty ((:|))
-import Data.Json.Extended as EJ
-import Data.Tuple (Tuple(..), uncurry)
-import SqlSquared.Path as Pt
 import Data.String as S
-
+import Data.String.CodeUnits as SCU
+import Data.Tuple (Tuple(..), uncurry)
+import Matryoshka (class Corecursive, embed)
 import SqlSquared.Constructors as C
 import SqlSquared.Parser.Tokenizer (Token(..), TokenStream, PositionedToken, tokenize, Literal(..), printToken)
+import SqlSquared.Path as Pt
 import SqlSquared.Signature as Sig
 import SqlSquared.Utils ((∘), type (×), (×))
-import Matryoshka (class Corecursive, embed)
-
 import Text.Parsing.Parser as P
 import Text.Parsing.Parser.Combinators as PC
 import Text.Parsing.Parser.Pos as PP
@@ -75,7 +73,7 @@ prettyParse parser input =
   lmap printError (parser input)
   where
   padLeft n s =
-    S.fromCharArray (A.replicate (n - S.length s) ' ') <> s
+    SCU.fromCharArray (A.replicate (n - S.length s) ' ') <> s
 
   printError parseError =
     let
@@ -86,7 +84,7 @@ prettyParse parser input =
       line = A.take 1 $ A.drop (pos.line - 1) lines
       post = A.take 3 $ A.drop pos.line lines
       nums = A.mapWithIndex (\n l → padLeft 4 (show (n + pos.line - (A.length pre))) <> " | " <> l) (pre <> line <> post)
-      pointer = pure $ S.fromCharArray (A.replicate (pos.column - 1 + 7) '-') <> "^ " <> message
+      pointer = pure $ SCU.fromCharArray (A.replicate (pos.column - 1 + 7) '-') <> "^ " <> message
     in
       S.joinWith "\n" $ A.take (A.length pre + 1) nums <> pointer <> A.drop 3 nums
 
@@ -471,7 +469,7 @@ negatableSuffix = do
     n ← PC.optionMaybe $ keyword "not"
     pure $ isJust n
   suffix ← betweenSuffix <|> inSuffix <|> likeSuffix
-  pure \e → (if inv then _NOT else id) $ suffix e
+  pure \e → (if inv then _NOT else identity) $ suffix e
 
 betweenSuffix ∷ ∀ m t. SqlParser m t (t → t)
 betweenSuffix = do

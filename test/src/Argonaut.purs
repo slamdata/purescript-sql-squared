@@ -36,7 +36,7 @@ jcCoalgebra = case _ of
 jcursorToSql ∷ JCursor → S.Sql
 jcursorToSql = JS.insideOut ⋙ JC ⋙ ana jcCoalgebra
 
-fields ∷ JS.JArray → L.List S.Sql
+fields ∷ Array JS.Json → L.List S.Sql
 fields arr =
   map jcursorToSql $ L.fromFoldable $ F.foldMap (Set.fromFoldable ∘ map fst) $ map JS.toPrims arr
 
@@ -52,11 +52,11 @@ allParentsF (parent × sqlF) = case sqlF of
 allParents ∷ S.Sql → L.List S.Sql
 allParents = elgotPara allParentsF
 
-allFields ∷ JS.JArray → L.List S.Sql
+allFields ∷ Array JS.Json → L.List S.Sql
 allFields =
   L.fromFoldable ∘ F.foldMap (Set.fromFoldable ∘ allParents) ∘ fields
 
-jarray ∷ JS.JArray
+jarray ∷ Array JS.Json
 jarray =
   map (unsafePartial fromRight ∘ jsonParser) jsonStrings
   where
@@ -65,7 +65,7 @@ jarray =
     , """{"foo": true}"""
     , """[12, null]"""
     ]
-testSuite ∷ ∀ e. TestSuite e
+testSuite ∷ TestSuite
 testSuite =
   suite "tests for argonaut example" do
     test "interpretation works"
@@ -131,4 +131,4 @@ testSuite =
           : "*.bar"
           : L.Nil
       in
-        Assert.equal expectedFields actualFields
+Assert.equal expectedFields actualFields

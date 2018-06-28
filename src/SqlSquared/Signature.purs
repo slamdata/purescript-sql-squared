@@ -15,14 +15,6 @@ module SqlSquared.Signature
   , printSqlDeclF
   , printSqlQueryF
   , printSqlModuleF
-  , encodeJsonSqlF
-  , encodeJsonSqlDeclF
-  , encodeJsonSqlQueryF
-  , encodeJsonSqlModuleF
-  , decodeJsonSqlF
-  , decodeJsonSqlDeclF
-  , decodeJsonSqlQueryF
-  , decodeJsonSqlModuleF
   , genSqlF
   , genSqlDeclF
   , genSqlQueryF
@@ -44,10 +36,8 @@ import Prelude
 
 import Control.Monad.Gen as Gen
 import Control.Monad.Rec.Class (class MonadRec)
-import Data.Argonaut as J
 import Data.Array as A
-import Data.Either as E
-import Data.Eq (class Eq1, eq1)
+import Data.Eq (class Eq1)
 import Data.Foldable as F
 import Data.HugeInt as HI
 import Data.HugeNum as HN
@@ -55,25 +45,24 @@ import Data.Int as Int
 import Data.Json.Extended as EJ
 import Data.List as L
 import Data.Maybe (Maybe(..))
-import Data.Monoid (mempty)
 import Data.Newtype (class Newtype)
 import Data.NonEmpty ((:|))
-import Data.Ord (class Ord1, compare1)
+import Data.Ord (class Ord1)
 import Data.String as S
 import Data.String.Gen as GenS
 import Data.Traversable as T
 import Matryoshka (Algebra, CoalgebraM, class Corecursive, embed)
 import SqlSquared.Path as Pt
-import SqlSquared.Signature.BinaryOperator as BO
-import SqlSquared.Signature.Case as CS
-import SqlSquared.Signature.GroupBy as GB
-import SqlSquared.Signature.Ident as ID
-import SqlSquared.Signature.JoinType as JT
-import SqlSquared.Signature.OrderBy as OB
-import SqlSquared.Signature.OrderType as OT
-import SqlSquared.Signature.Projection as PR
-import SqlSquared.Signature.Relation as RL
-import SqlSquared.Signature.UnaryOperator as UO
+import SqlSquared.Signature.BinaryOperator (BinaryOperator(..), binopFromString, binopToString, genBinaryOperator, printBinaryOperator) as BO
+import SqlSquared.Signature.Case (Case(..), genCase, printCase) as CS
+import SqlSquared.Signature.GroupBy (GroupBy(..), genGroupBy, printGroupBy) as GB
+import SqlSquared.Signature.Ident (printIdent) as ID
+import SqlSquared.Signature.JoinType (JoinType(..), genJoinType, joinTypeFromString, printJoinType) as JT
+import SqlSquared.Signature.OrderBy (OrderBy(..), genOrderBy, printOrderBy) as OB
+import SqlSquared.Signature.OrderType (OrderType(..), genOrderType, orderTypeFromString, printOrderType) as OT
+import SqlSquared.Signature.Projection (Projection(..), genProjection, printProjection) as PR
+import SqlSquared.Signature.Relation (ExprRelR, JoinRelR, Relation(..), TableRelR, VariRelR, genRelation, printRelation) as RL
+import SqlSquared.Signature.UnaryOperator (UnaryOperator(..), genUnaryOperator, printUnaryOperator, unopFromString, unopToString) as UO
 import SqlSquared.Utils (type (×), (×), (∘), (⋙))
 
 type BinopR a =
@@ -149,147 +138,26 @@ newtype SqlModuleF a =
 data SqlQueryF a =
   Query (L.List (SqlDeclF a)) a
 
-derive instance eqSqlF ∷ (Eq a, Eq (l a)) ⇒ Eq (SqlF l a)
-derive instance ordSqlF ∷ (Ord a, Ord (l a)) ⇒ Ord (SqlF l a)
+derive instance eqSqlF ∷ (Eq a, Eq1 l) ⇒ Eq (SqlF l a)
+derive instance ordSlqF ∷ (Ord a, Ord1 l) ⇒ Ord (SqlF l a)
+derive instance eq1SqlF ∷ Eq1 l ⇒ Eq1 (SqlF l)
+derive instance ord1SqlF ∷ Ord1 l ⇒ Ord1 (SqlF l)
 
 derive instance eqSqlDeclF ∷ Eq a ⇒ Eq (SqlDeclF a)
 derive instance ordSqlDeclF ∷ Ord a ⇒ Ord (SqlDeclF a)
+derive instance eq1SqlDeclF ∷ Eq1 SqlDeclF
+derive instance ord1SqlDeclF ∷ Ord1 SqlDeclF
 
 derive instance eqSqlModuleF ∷ Eq a ⇒ Eq (SqlModuleF a)
 derive instance ordSqlModuleF ∷ Ord a ⇒ Ord (SqlModuleF a)
 derive instance newtypeSqlModuleF ∷ Newtype (SqlModuleF a) _
+derive instance eq1SqlModuleF ∷ Eq1 SqlModuleF
+derive instance ord1SqlModuleF ∷ Ord1 SqlModuleF
 
 derive instance eqSqlQueryF ∷ Eq a ⇒ Eq (SqlQueryF a)
 derive instance ordSqlQueryF ∷ Ord a ⇒ Ord (SqlQueryF a)
-
-instance eq1SqlF ∷ Eq1 l ⇒ Eq1 (SqlF l) where
-  eq1 (SetLiteral lst) (SetLiteral llst) = eq lst llst
-  eq1 (Literal l) (Literal ll) = eq1 l ll
-  eq1 (Splice a) (Splice aa) = eq a aa
-  eq1 (Binop r) (Binop rr) =
-    r.lhs == rr.lhs
-    && r.rhs == rr.rhs
-    && r.op == rr.op
-  eq1 (Unop r) (Unop rr) =
-    r.expr == rr.expr
-    && r.op == rr.op
-  eq1 (Ident s) (Ident ss) =
-    s == ss
-  eq1 (InvokeFunction r) (InvokeFunction rr) =
-    r.name == rr.name
-    && r.args == rr.args
-  eq1 (Match r) (Match rr) =
-    r.else_ == rr.else_
-    && r.cases == rr.cases
-    && r.expr == rr.expr
-  eq1 (Switch r) (Switch rr) =
-    r.cases == rr.cases
-    && r.else_ == rr.else_
-  eq1 (Let r) (Let rr) =
-    r.in_ == r.in_
-    && r.bindTo == rr.bindTo
-    && r.ident == rr.ident
-  eq1 (Vari v) (Vari vv) =
-    v == vv
-  eq1 (Parens a) (Parens aa) =
-    a == aa
-  eq1 (Select r) (Select rr) =
-    r.isDistinct == rr.isDistinct
-    && r.projections == rr.projections
-    && r.relations == rr.relations
-    && r.filter == rr.filter
-    && r.groupBy == rr.groupBy
-    && r.orderBy == rr.orderBy
-  eq1 _ _ = false
-
-instance eq1SqlDeclF ∷ Eq1 SqlDeclF where
-  eq1 (Import a) (Import b) = a == b
-  eq1 (FunctionDecl r) (FunctionDecl rr) =
-    r.ident == rr.ident
-    && r.args == rr.args
-    && r.body == rr.body
-  eq1 _ _ = false
-
-instance eq1SqlQueryF ∷ Eq1 SqlQueryF where
-  eq1 (Query a c) (Query b d) = a == b && c == d
-
-instance eq1SqlModuleF ∷ Eq1 SqlModuleF where
-  eq1 (Module a) (Module b) = a == b
-
-instance ord1SqlF ∷ Ord1 l ⇒ Ord1 (SqlF l) where
-  compare1 (Literal l) (Literal ll) = compare1 l ll
-  compare1 (Literal _) _ = LT
-  compare1 _ (Literal _) = GT
-  compare1 (SetLiteral s) (SetLiteral ss) = compare s ss
-  compare1 (SetLiteral _) _ = LT
-  compare1 _ (SetLiteral _) = GT
-  compare1 (Splice a) (Splice aa) = compare a aa
-  compare1 (Splice _) _ = LT
-  compare1 _ (Splice _) = GT
-  compare1 (Binop r) (Binop rr) =
-    compare r.lhs rr.lhs
-    <> compare r.rhs rr.rhs
-    <> compare r.op rr.op
-  compare1 (Binop _) _ = LT
-  compare1 _ (Binop _) = GT
-  compare1 (Unop r) (Unop rr) =
-    compare r.op rr.op
-    <> compare r.expr rr.expr
-  compare1 (Unop _) _ = LT
-  compare1 _ (Unop _) = GT
-  compare1 (Ident s) (Ident ss) = compare s ss
-  compare1 (Ident s) _ = LT
-  compare1 _ (Ident s) = GT
-  compare1 (InvokeFunction r) (InvokeFunction rr) =
-    compare r.name rr.name
-    <> compare r.args rr.args
-  compare1 (InvokeFunction _) _ = LT
-  compare1 _ (InvokeFunction _) = GT
-  compare1 (Match r) (Match rr) =
-    compare r.else_ rr.else_
-    <> compare r.expr rr.expr
-    <> compare r.cases rr.cases
-  compare1 (Match _) _ = LT
-  compare1 _ (Match _) = GT
-  compare1 (Switch r) (Switch rr) =
-    compare r.else_ rr.else_
-    <> compare r.cases rr.cases
-  compare1 (Switch _) _ = LT
-  compare1 _ (Switch _) = GT
-  compare1 (Let r) (Let rr) =
-    compare r.in_ rr.in_
-    <> compare r.bindTo rr.bindTo
-    <> compare r.ident rr.ident
-  compare1 (Let _) _ = LT
-  compare1 _ (Let _) = GT
-  compare1 (Vari v) (Vari vv) = compare v vv
-  compare1 (Vari _) _ = LT
-  compare1 _ (Vari _) = GT
-  compare1 (Parens a) (Parens aa) = compare a aa
-  compare1 (Parens a) _ = LT
-  compare1 _ (Parens _) = GT
-  compare1 (Select r) (Select rr) =
-    compare r.isDistinct rr.isDistinct
-    <> compare r.projections rr.projections
-    <> compare r.filter rr.filter
-    <> compare r.relations rr.relations
-    <> compare r.orderBy rr.orderBy
-    <> compare r.groupBy rr.groupBy
-
-instance ord1SqlDeclF ∷ Ord1 SqlDeclF where
-  compare1 (Import a) (Import b) = compare a b
-  compare1 (Import _) _ = LT
-  compare1 _ (Import _) = GT
-  compare1 (FunctionDecl r) (FunctionDecl rr) =
-    compare r.ident rr.ident
-    <> compare r.args rr.args
-    <> compare r.body rr.body
-
-instance ord1SqlQueryF ∷ Ord1 SqlQueryF where
-  compare1 (Query a c) (Query b d) = compare a b <> compare c d
-
-instance ord1SqlModuleF ∷ Ord1 SqlModuleF where
-  compare1 (Module a) (Module b) = compare a b
+derive instance eq1SqlQueryF ∷ Eq1 SqlQueryF
+derive instance ord1SqlQueryF ∷ Ord1 SqlQueryF
 
 derive instance functorSqlF ∷ Functor l ⇒ Functor (SqlF l)
 derive instance functorSqlDeclF ∷ Functor SqlDeclF
@@ -511,229 +379,6 @@ printSqlQueryF (Query decls expr) = F.intercalate "; " $ L.snoc (printSqlDeclF <
 
 printSqlModuleF ∷ Algebra SqlModuleF String
 printSqlModuleF (Module decls) = F.intercalate "; " $ printSqlDeclF <$> decls
-
-encodeJsonSqlF ∷ ∀ l. Algebra l J.Json → Algebra (SqlF l) J.Json
-encodeJsonSqlF alg = case _ of
-  SetLiteral lst →
-    "tag" J.:= "set literal"
-    J.~> "value" J.:= lst
-    J.~> J.jsonEmptyObject
-  Literal l →
-    "tag" J.:= "literal"
-    J.~> "value" J.:= alg l
-    J.~> J.jsonEmptyObject
-  Splice a →
-    "tag" J.:= "splice"
-    J.~> "value" J.:= a
-    J.~> J.jsonEmptyObject
-  Binop { lhs, rhs, op } →
-    "tag" J.:= "binop"
-    J.~> "lhs" J.:= lhs
-    J.~> "rhs" J.:= rhs
-    J.~> "op" J.:= op
-    J.~> J.jsonEmptyObject
-  Unop { expr, op } →
-    "tag" J.:= "unop"
-    J.~> "expr" J.:= expr
-    J.~> "op" J.:= op
-    J.~> J.jsonEmptyObject
-  Ident s →
-    "tag" J.:= "ident"
-    J.~> "value" J.:= s
-    J.~> J.jsonEmptyObject
-  InvokeFunction { name, args } →
-    "tag" J.:= "invoke function"
-    J.~> "name" J.:= name
-    J.~> "args" J.:= args
-    J.~> J.jsonEmptyObject
-  Match { expr, cases, else_ } →
-    "tag" J.:= "match"
-    J.~> "expr" J.:= expr
-    J.~> "cases" J.:= map CS.encodeJsonCase cases
-    J.~> "else_" J.:= else_
-    J.~> J.jsonEmptyObject
-  Switch { cases, else_ } →
-    "tag" J.:= "switch"
-    J.~> "cases" J.:= map CS.encodeJsonCase cases
-    J.~> "else_" J.:= else_
-    J.~> J.jsonEmptyObject
-  Let { ident, bindTo, in_ } →
-    "tag" J.:= "let"
-    J.~> "ident" J.:= ident
-    J.~> "bindTo" J.:= bindTo
-    J.~> "in_" J.:= in_
-    J.~> J.jsonEmptyObject
-  Vari s →
-    "tag" J.:= "vari"
-    J.~> "value" J.:= s
-    J.~> J.jsonEmptyObject
-  Select { isDistinct, projections, relations, filter, groupBy, orderBy } →
-    "tag" J.:= "select"
-    J.~> "isDistinct" J.:= isDistinct
-    J.~> "projections" J.:= map PR.encodeJsonProjection projections
-    J.~> "relations" J.:= map RL.encodeJsonRelation relations
-    J.~> "filter" J.:= filter
-    J.~> "groupBy" J.:= map GB.encodeJsonGroupBy groupBy
-    J.~> "orderBy" J.:= map OB.encodeJsonOrderBy orderBy
-    J.~> J.jsonEmptyObject
-  Parens a →
-    "tag" J.:= "parens"
-    J.~> "value" J.:= a
-    J.~> J.jsonEmptyObject
-
-encodeJsonSqlDeclF ∷ Algebra SqlDeclF J.Json
-encodeJsonSqlDeclF = case _ of
-  FunctionDecl { ident, args, body } →
-    "tag" J.:= "create function"
-    J.~> "ident" J.:= ident
-    J.~> "args" J.:= args
-    J.~> "body" J.:= body
-    J.~> J.jsonEmptyObject
-  Import path →
-    "tag" J.:= "import"
-    J.~> "value" J.:= Pt.printAnyDirPath path
-    J.~> J.jsonEmptyObject
-
-encodeJsonSqlQueryF ∷ Algebra SqlQueryF J.Json
-encodeJsonSqlQueryF (Query decls expr) =
-  "tag" J.:= "query"
-  J.~> "decls" J.:= (encodeJsonSqlDeclF <$> decls)
-  J.~> "expr" J.:= expr
-  J.~> J.jsonEmptyObject
-
-encodeJsonSqlModuleF ∷ Algebra SqlModuleF J.Json
-encodeJsonSqlModuleF (Module decls) =
-  "tag" J.:= "module"
-  J.~> "decls" J.:= (encodeJsonSqlDeclF <$> decls)
-  J.~> J.jsonEmptyObject
-
-decodeJsonSqlF
-  ∷ ∀ l
-  . CoalgebraM (E.Either String) l J.Json
-  → CoalgebraM (E.Either String) (SqlF l) J.Json
-decodeJsonSqlF coalg = J.decodeJson >=> \obj → do
-  tag ← obj J..? "tag"
-  case tag of
-    "set literal" → decodeSetLiteral obj
-    "literal" → decodeLiteral obj
-    "splice" → decodeSplice obj
-    "binop" → decodeBinop obj
-    "unop" → decodeUnop obj
-    "ident" → decodeIdent obj
-    "invoke function" → decodeInvokeFunction obj
-    "match" → decodeMatch obj
-    "switch" → decodeSwitch obj
-    "let" → decodeLet obj
-    "vari" → decodeVari obj
-    "select" → decodeSelect obj
-    "parens" → decodeParens obj
-    _ → E.Left $ "Invalid SQL^2 expression: " <> tag
-  where
-  decodeSetLiteral obj = do
-    v ← obj J..? "value"
-    pure $ SetLiteral v
-
-  decodeLiteral obj = do
-    v ← obj J..? "value"
-    literal ← coalg v
-    pure $ Literal literal
-
-  decodeSplice obj = do
-    v ← obj J..? "value"
-    pure $ Splice v
-
-  decodeBinop obj = do
-    lhs ← obj J..? "lhs"
-    rhs ← obj J..? "rhs"
-    op ← obj J..? "op"
-    pure $ Binop { lhs, rhs, op }
-
-  decodeUnop obj = do
-    expr ← obj J..? "expr"
-    op ← obj J..? "op"
-    pure $ Unop { expr, op }
-
-  decodeIdent obj = do
-    v ← obj J..? "value"
-    pure $ Ident v
-
-  decodeInvokeFunction obj = do
-    name ← obj J..? "name"
-    args ← obj J..? "args"
-    pure $ InvokeFunction { name, args }
-
-  decodeMatch obj = do
-    expr ← obj J..? "expr"
-    cases ← (obj J..? "cases") >>= T.traverse CS.decodeJsonCase
-    else_ ← obj J..? "else_"
-    pure $ Match { expr, cases, else_ }
-
-  decodeSwitch obj = do
-   cases ← (obj J..? "cases") >>= T.traverse CS.decodeJsonCase
-   else_ ← obj J..? "else_"
-   pure $ Switch { cases, else_ }
-
-  decodeLet obj = do
-    ident ← obj J..? "ident"
-    bindTo ← obj J..? "bindTo"
-    in_ ← obj J..? "in_"
-    pure $ Let { ident, bindTo, in_ }
-
-  decodeVari obj = do
-    v ← obj J..? "value"
-    pure $ Vari v
-
-  decodeSelect obj = do
-    isDistinct ← obj J..? "isDistinct"
-    projections ← (obj J..? "projections") >>= T.traverse PR.decodeJsonProjection
-    relations ← (obj J..? "relations") >>= T.traverse RL.decodeJsonRelation
-    filter ← obj J..? "filter"
-    groupBy ← (obj J..? "groupBy") >>= T.traverse GB.decodeJsonGroupBy
-    orderBy ← (obj J..? "orderBy") >>= T.traverse OB.decodeJsonOrderBy
-    pure $ Select { isDistinct, projections, relations, filter, groupBy, orderBy }
-
-  decodeParens obj = do
-    v ← obj J..? "value"
-    pure $ Parens v
-
-decodeJsonSqlDeclF ∷ CoalgebraM (E.Either String) SqlDeclF J.Json
-decodeJsonSqlDeclF = J.decodeJson >=> \obj → do
-  tag ← obj J..? "tag"
-  case tag of
-    "create function" → decodeFunctionDecl obj
-    "import" → decodeImport obj
-    _ → E.Left $ "Invalid SQL^2 declaration: " <> tag
-
-  where
-  decodeFunctionDecl obj = do
-    ident ← obj J..? "ident"
-    args ← obj J..? "args"
-    body ← obj J..? "body"
-    pure $ FunctionDecl { ident, args, body }
-
-  decodeImport obj = do
-    v ← obj J..? "value"
-    path ← Pt.parseAnyDirPath E.Left v
-    pure $ Import path
-
-decodeJsonSqlQueryF ∷ CoalgebraM (E.Either String) SqlQueryF J.Json
-decodeJsonSqlQueryF = J.decodeJson >=> \obj → do
-  tag ← obj J..? "tag"
-  case tag of
-    "query" → do
-      decls ← T.traverse decodeJsonSqlDeclF =<< obj J..? "decls"
-      expr ← obj J..? "expr"
-      pure $ Query decls expr
-    _ → E.Left $ "Invalid top-level SQL^2 production: " <> tag
-
-decodeJsonSqlModuleF ∷ CoalgebraM (E.Either String) SqlModuleF J.Json
-decodeJsonSqlModuleF = J.decodeJson >=> \obj → do
-  tag ← obj J..? "tag"
-  case tag of
-    "module" → do
-      decls ← T.traverse decodeJsonSqlDeclF =<< obj J..? "decls"
-      pure $ Module decls
-    _ → E.Left $ "Invalid top-level SQL^2 production: " <> tag
 
 genSqlF
   ∷ ∀ m l
