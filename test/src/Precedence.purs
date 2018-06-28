@@ -4,13 +4,11 @@ import Prelude
 
 import Data.Either as E
 import Matryoshka (project)
-
 import SqlSquared as S
-
 import Test.Unit (suite, test, Test, TestSuite)
 import Test.Unit.Assert as Assert
 
-testParsedSql ∷ ∀ e. (S.Sql → Test e) → String → Test e
+testParsedSql ∷ (S.Sql → Test) → String → Test
 testParsedSql f s =
   case S.prettyParse S.parse s of
     E.Left err → Assert.assert ("\n" <> err) false
@@ -25,7 +23,7 @@ expectLimit sql =
     (S.Binop { lhs: _, rhs: _, op: S.Limit }) → true
     _ → false
 
-testSuite ∷ ∀ e. TestSuite e
+testSuite ∷ TestSuite
 testSuite = do
   suite "tests for parser precedence" do
     test "limit should have higher precedence than join condition"

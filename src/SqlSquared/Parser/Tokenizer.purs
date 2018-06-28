@@ -21,7 +21,8 @@ import Data.Int as Int
 import Data.Json.Extended.Signature.Parse as EJP
 import Data.Maybe (Maybe(..))
 import Data.Set as Set
-import Data.String as S
+import Data.String (length, toUpper, toLower) as S
+import Data.String.CodeUnits (fromCharArray, drop, singleton) as S
 import Data.Traversable (sequence)
 import SqlSquared.Utils ((∘))
 import Text.Parsing.Parser as P
@@ -259,9 +260,9 @@ charLit = PS.char '\'' *> charAtom <* PS.char '\''
 
   hexEscape = do
     hex ← S.fromCharArray <$> sequence (A.replicate 4 PT.hexDigit)
-    case Int.fromStringAs Int.hexadecimal hex of
+    case Int.fromStringAs Int.hexadecimal hex >>= Char.fromCharCode of
       Nothing → P.fail "Expected character escape sequence"
-      Just i → pure $ Char.fromCharCode i
+      Just i → pure i
 
 positioned ∷ ∀ m. Monad m ⇒ P.ParserT String m Token → P.ParserT String m PositionedToken
 positioned m = do

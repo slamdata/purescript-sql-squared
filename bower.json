@@ -15,19 +15,15 @@
     "package.json"
   ],
   "dependencies": {
-    "purescript-prelude": "^3.1.0",
-    "purescript-matryoshka": "^0.3.0",
-    "purescript-pathy": "^5.0.0",
-    "purescript-profunctor": "^3.2.0",
-    "purescript-profunctor-lenses": "^3.2.0",
-    "purescript-ejson": "^10.0.1",
-    "purescript-argonaut-codecs": "^3.1.0"
+    "purescript-prelude": "^4.0.1",
+    "purescript-matryoshka": "^0.4.0",
+    "purescript-pathy": "^6.0.0",
+    "purescript-profunctor-lenses": "^4.0.0",
+    "purescript-ejson": "^11.0.0"
   },
   "devDependencies": {
-    "purescript-argonaut": "^3.0.0",
-    "purescript-debug": "^3.0.0",
-    "purescript-quickcheck": "^4.4.0",
-    "purescript-search": "^3.0.0",
-    "purescript-test-unit": "^11.0.0"
+    "purescript-quickcheck": "^5.0.0",
+    "purescript-test-unit": "^14.0.0",
+    "purescript-argonaut": "^4.0.1"
   }
 }

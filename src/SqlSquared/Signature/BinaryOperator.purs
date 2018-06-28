@@ -3,7 +3,6 @@ module SqlSquared.Signature.BinaryOperator where
 import Prelude
 
 import Control.Monad.Gen as Gen
-import Data.Argonaut as J
 import Data.Either (Either(..))
 import Data.NonEmpty ((:|))
 
@@ -106,19 +105,6 @@ binopFromString = case _ of
 
 derive instance eqBinaryOperator ∷ Eq BinaryOperator
 derive instance ordBinaryOperator ∷ Ord BinaryOperator
-
-instance encodeJsonBinaryOperator ∷ J.EncodeJson BinaryOperator where
-  encodeJson op =
-    "tag" J.:= "binary operator"
-    J.~> "value" J.:= binopToString op
-    J.~> J.jsonEmptyObject
-
-instance decodeJsonBinaryOperator ∷ J.DecodeJson BinaryOperator where
-  decodeJson = J.decodeJson >=> \obj → do
-    tag ← obj J..? "tag"
-    unless (tag == "binary operator")
-      $ Left "This is not a binary operator"
-    (obj J..? "value") >>= binopFromString
 
 genBinaryOperator ∷ ∀ m. Gen.MonadGen m ⇒ m BinaryOperator
 genBinaryOperator =

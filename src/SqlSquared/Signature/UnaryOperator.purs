@@ -3,7 +3,6 @@ module SqlSquared.Signature.UnaryOperator where
 import Prelude
 
 import Control.Monad.Gen as Gen
-import Data.Argonaut as J
 import Data.Either (Either(..))
 import Data.NonEmpty ((:|))
 
@@ -60,19 +59,6 @@ unopFromString = case _ of
 
 derive instance eqUnaryOperator ∷ Eq UnaryOperator
 derive instance ordUnaryOperator ∷ Ord UnaryOperator
-
-instance encodeJsonUnaryOperator ∷ J.EncodeJson UnaryOperator where
-  encodeJson op =
-    "tag" J.:= "unary operator"
-    J.~> "value" J.:= unopToString op
-    J.~> J.jsonEmptyObject
-
-instance decodeJsonUnaryOperator ∷ J.DecodeJson UnaryOperator where
-  decodeJson = J.decodeJson >=> \obj → do
-    tag ← obj J..? "tag"
-    unless (tag == "unary operator")
-      $ Left $ "This is not a unary operator " <> tag
-    (obj J..? "value") >>= unopFromString
 
 genUnaryOperator ∷ ∀ m. Gen.MonadGen m ⇒ m UnaryOperator
 genUnaryOperator =

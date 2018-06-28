@@ -3,8 +3,6 @@ module SqlSquared.Signature.Case where
 import Prelude
 
 import Control.Monad.Gen as Gen
-import Data.Argonaut as J
-import Data.Either as E
 import Data.Foldable as F
 import Data.Newtype (class Newtype)
 import Data.Traversable as T
@@ -28,21 +26,6 @@ instance traversableCase ∷ T.Traversable Case where
 
 printCase ∷ Algebra Case String
 printCase (Case { cond, expr }) = "WHEN " <> cond <> " THEN " <> expr
-
-encodeJsonCase ∷ Algebra Case J.Json
-encodeJsonCase (Case { cond, expr }) =
-  "tag" J.:= "case"
-  J.~> "cond" J.:= cond
-  J.~> "expr" J.:= expr
-  J.~> J.jsonEmptyObject
-
-decodeJsonCase ∷ CoalgebraM (E.Either String) Case J.Json
-decodeJsonCase = J.decodeJson >=> \obj → do
-  tag ← obj J..? "tag"
-  unless (tag == "case") $ E.Left "This is not case expression"
-  cond ← obj J..? "cond"
-  expr ← obj J..? "expr"
-  pure $ Case { cond, expr }
 
 genCase ∷ ∀ m. Gen.MonadGen m ⇒ CoalgebraM m Case Int
 genCase n

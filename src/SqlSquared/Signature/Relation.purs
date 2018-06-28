@@ -5,11 +5,8 @@ import Prelude
 import Control.Monad.Gen as Gen
 import Control.Monad.Gen.Common as GenC
 import Control.Monad.Rec.Class (class MonadRec)
-import Data.Argonaut as J
-import Data.Either (Either(..))
 import Data.Foldable as F
 import Data.Maybe (Maybe)
-import Data.Monoid (mempty)
 import Data.NonEmpty ((:|))
 import Data.String.Gen as GenS
 import Data.Traversable as T
@@ -100,64 +97,6 @@ printRelation = case _ of
     <> printRelation right
     <> " ON "
     <> clause
-
-encodeJsonRelation ∷ Algebra Relation J.Json
-encodeJsonRelation = case _ of
-  ExprRelation { expr, aliasName } →
-    "tag" J.:= "expr relation"
-    J.~> "expr" J.:= expr
-    J.~> "aliasName" J.:= aliasName
-    J.~> J.jsonEmptyObject
-  VariRelation { vari, alias } →
-    "tag" J.:= "vari relation"
-    J.~> "vari" J.:= vari
-    J.~> "alias" J.:= alias
-    J.~> J.jsonEmptyObject
-  TableRelation { path, alias } →
-    "tag" J.:= "table relation"
-    J.~> "path" J.:= Pt.printAnyFilePath path
-    J.~> "alias" J.:= alias
-    J.~> J.jsonEmptyObject
-  JoinRelation { left, right, joinType, clause } →
-    "tag" J.:= "join relation"
-    J.~> "left" J.:= encodeJsonRelation left
-    J.~> "right" J.:= encodeJsonRelation right
-    J.~> "joinType" J.:= joinType
-    J.~> "clause" J.:= clause
-    J.~> J.jsonEmptyObject
-
-decodeJsonRelation ∷ CoalgebraM (Either String) Relation J.Json
-decodeJsonRelation = J.decodeJson >=> \obj → do
-  tag ← obj J..? "tag"
-  case tag of
-    "expr relation" → decodeExprRelation obj
-    "vari relation" → decodeVariRelation obj
-    "table relation" → decodeTableRelation obj
-    "join relation" → decodeJoinRelation obj
-    _ → Left "This is not join relation"
-  where
-  decodeExprRelation obj = do
-    expr ← obj J..? "expr"
-    aliasName ← obj J..? "aliasName"
-    pure $ ExprRelation { expr, aliasName }
-
-  decodeVariRelation obj = do
-    vari ← obj J..? "vari"
-    alias ← obj J..? "alias"
-    pure $ VariRelation { vari, alias }
-
-  decodeTableRelation obj = do
-    pathStr ← obj J..? "path"
-    path ← Pt.parseAnyFilePath Left pathStr
-    alias ← obj J..? "alias"
-    pure $ TableRelation { path, alias }
-
-  decodeJoinRelation obj = do
-    left ← decodeJsonRelation =<< obj J..? "left"
-    right ← decodeJsonRelation =<< obj J..? "right"
-    clause ← obj J..? "clause"
-    joinType ← obj J..? "joinType"
-    pure $ JoinRelation { left, right, clause, joinType }
 
 genRelation ∷ ∀ m. Gen.MonadGen m ⇒ MonadRec m ⇒ CoalgebraM m Relation Int
 genRelation n =
