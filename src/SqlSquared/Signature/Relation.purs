@@ -26,17 +26,17 @@ type JoinRelR a =
 
 type ExprRelR a =
   { expr ∷ a
-  , aliasName ∷ String
+  , alias ∷ ID.Ident
   }
 
 type VariRelR =
-  { vari ∷ String
-  , alias ∷ Maybe String
+  { vari ∷ ID.Ident
+  , alias ∷ Maybe ID.Ident
   }
 
 type TableRelR =
   { path ∷ Either Pt.AnyDir Pt.AnyFile
-  , alias ∷ Maybe String
+  , alias ∷ Maybe ID.Ident
   }
 
 data Relation a
@@ -73,8 +73,8 @@ instance traversableRelation ∷ T.Traversable Relation where
       <$> T.traverse f left
       <*> T.traverse f right
       <*> f clause
-    ExprRelation  { expr, aliasName} →
-      (ExprRelation ∘ { expr: _, aliasName})
+    ExprRelation  { expr, alias } →
+      (ExprRelation ∘ { expr: _, alias })
       <$> f expr
     VariRelation v → pure $ VariRelation v
     TableRelation i → pure $ TableRelation i
@@ -82,9 +82,9 @@ instance traversableRelation ∷ T.Traversable Relation where
 
 printRelation ∷ Algebra Relation String
 printRelation = case _ of
-  ExprRelation {expr, aliasName} →
-    "(" <> expr <> ") AS " <> ID.printIdent aliasName
-  VariRelation { vari, alias} →
+  ExprRelation { expr, alias } →
+    "(" <> expr <> ") AS " <> ID.printIdent alias
+  VariRelation { vari, alias } →
     ":" <> ID.printIdent vari <> F.foldMap (\a → " AS " <> ID.printIdent a) alias
   TableRelation { path, alias } →
     "`"
@@ -115,16 +115,16 @@ genRelation n =
       ]
   where
   genVari = do
-    vari ← GenS.genUnicodeString
-    alias ← GenC.genMaybe GenS.genUnicodeString
+    vari ← ID.Ident <$> GenS.genUnicodeString
+    alias ← map ID.Ident <$> GenC.genMaybe GenS.genUnicodeString
     pure $ VariRelation { vari, alias }
   genTable = do
     path ← Right <$> Pt.genAnyFilePath
-    alias ← GenC.genMaybe GenS.genUnicodeString
+    alias ← map ID.Ident <$> GenC.genMaybe GenS.genUnicodeString
     pure $ TableRelation { path, alias }
   genExpr = do
-    aliasName ← GenS.genUnicodeString
-    pure $ ExprRelation { aliasName, expr: n - 1 }
+    alias ← ID.Ident <$> GenS.genUnicodeString
+    pure $ ExprRelation { alias, expr: n - 1 }
   genJoin = do
     joinType ← JT.genJoinType
     left ← genRelation $ n - 1

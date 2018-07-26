@@ -56,7 +56,7 @@ import SqlSquared.Path as Pt
 import SqlSquared.Signature.BinaryOperator (BinaryOperator(..), binopFromString, binopToString, genBinaryOperator, printBinaryOperator) as BO
 import SqlSquared.Signature.Case (Case(..), genCase, printCase) as CS
 import SqlSquared.Signature.GroupBy (GroupBy(..), genGroupBy, printGroupBy) as GB
-import SqlSquared.Signature.Ident (printIdent) as ID
+import SqlSquared.Signature.Ident (Ident(..), printIdent) as ID
 import SqlSquared.Signature.JoinType (JoinType(..), genJoinType, joinTypeFromString, printJoinType) as JT
 import SqlSquared.Signature.OrderBy (OrderBy(..), genOrderBy, printOrderBy) as OB
 import SqlSquared.Signature.OrderType (OrderType(..), genOrderType, orderTypeFromString, printOrderType) as OT
@@ -77,7 +77,7 @@ type UnopR a =
   }
 
 type InvokeFunctionR a =
-  { name ∷ String
+  { name ∷ ID.Ident
   , args ∷ L.List a
   }
 
@@ -93,7 +93,7 @@ type SwitchR a =
   }
 
 type LetR a =
-  { ident ∷ String
+  { ident ∷ ID.Ident
   , bindTo ∷ a
   , in_ ∷ a
   }
@@ -108,8 +108,8 @@ type SelectR a =
   }
 
 type FunctionDeclR a =
-  { ident ∷ String
-  , args ∷ L.List String
+  { ident ∷ ID.Ident
+  , args ∷ L.List ID.Ident
   , body ∷ a
   }
 
@@ -119,12 +119,12 @@ data SqlF literal a
   | Splice (Maybe a)
   | Binop (BinopR a)
   | Unop (UnopR a)
-  | Ident String
+  | Identifier ID.Ident
   | InvokeFunction (InvokeFunctionR a)
   | Match (MatchR a)
   | Switch (SwitchR a)
   | Let (LetR a)
-  | Vari String
+  | Vari ID.Ident
   | Select (SelectR a)
   | Parens a
 
@@ -166,7 +166,7 @@ derive instance functorSqlModuleF ∷ Functor SqlModuleF
 
 instance foldableSqlF ∷ F.Foldable l ⇒ F.Foldable (SqlF l) where
   foldMap f = case _ of
-    Ident _ → mempty
+    Identifier _ → mempty
     SetLiteral lst → F.foldMap f lst
     Splice mbA → F.foldMap f mbA
     Binop { lhs, rhs } → f lhs <> f rhs
@@ -185,7 +185,7 @@ instance foldableSqlF ∷ F.Foldable l ⇒ F.Foldable (SqlF l) where
     Parens a → f a
     Literal l → F.foldMap f l
   foldl f a = case _ of
-    Ident _ → a
+    Identifier _ → a
     SetLiteral lst → F.foldl f a lst
     Splice mbA → F.foldl f a mbA
     Binop { lhs, rhs } → f (f a lhs) rhs
@@ -212,7 +212,7 @@ instance foldableSqlF ∷ F.Foldable l ⇒ F.Foldable (SqlF l) where
     Parens p → f a p
     Literal l → F.foldl f a l
   foldr f a = case _ of
-    Ident _ → a
+    Identifier _ → a
     SetLiteral lst → F.foldr f a lst
     Splice mbA → F.foldr f a mbA
     Binop { lhs, rhs } → f rhs $ f lhs a
@@ -269,7 +269,7 @@ instance traversableSqlF ∷ T.Traversable l ⇒ T.Traversable (SqlF l) where
       map Binop $ { lhs: _, rhs: _, op } <$> f lhs <*> f rhs
     Unop { op, expr } →
       map Unop $ { expr: _, op } <$> f expr
-    Ident s → pure $ Ident s
+    Identifier s → pure $ Identifier s
     InvokeFunction { name, args } →
       map InvokeFunction $ { name, args:_ } <$> T.traverse f args
     Match { expr, cases, else_ } →
@@ -331,10 +331,10 @@ printSqlF printLiteralF = case _ of
     BO.printBinaryOperator lhs rhs op
   Unop {expr, op} →
     UO.printUnaryOperator expr op
-  Ident s →
+  Identifier s →
     ID.printIdent s
   InvokeFunction {name, args} →
-    name <> "(" <> F.intercalate ", " args <> ")"
+    ID.printIdent name <> "(" <> F.intercalate ", " args <> ")"
   Match { expr, cases, else_ } →
     "CASE "
     <> expr
@@ -372,7 +372,7 @@ printSqlDeclF = case _ of
     <> body
     <> " END"
   Import path →
-    "IMPORT " <> ID.printIdent (Pt.printAnyDirPath path)
+    "IMPORT " <> ID.printIdent (ID.Ident (Pt.printAnyDirPath path))
 
 printSqlQueryF ∷ Algebra SqlQueryF String
 printSqlQueryF (Query decls expr) = F.intercalate "; " $ L.snoc (printSqlDeclF <$> decls) expr
@@ -389,7 +389,7 @@ genSqlF
 genSqlF genLiteral n
   | n < 2 =
   Gen.oneOf $ (Literal <$> genLiteral n) :|
-    [ map Ident genIdent
+    [ map Identifier genIdent
     , map Vari genIdent
     , pure $ Splice Nothing
     , pure $ SetLiteral L.Nil
@@ -528,11 +528,11 @@ genFunctionDecl n = do
 genImport ∷ ∀ m a. Gen.MonadGen m ⇒ MonadRec m ⇒ m (SqlDeclF a)
 genImport = map Import Pt.genAnyDirPath
 
-genIdent ∷ ∀ m. Gen.MonadGen m ⇒ m String
+genIdent ∷ ∀ m. Gen.MonadGen m ⇒ m ID.Ident
 genIdent = do
   start ← Gen.elements $ "a" :| S.split (S.Pattern "") "bcdefghijklmnopqrstuvwxyz"
   body ← map (Int.toStringAs Int.hexadecimal) (Gen.chooseInt 0 100000)
-  pure $ start <> body
+  pure $ ID.Ident (start <> body)
 
 genDecls ∷ ∀ m. Gen.MonadGen m ⇒ MonadRec m ⇒ Int → m (L.List (SqlDeclF Int))
 genDecls n = do
@@ -614,7 +614,7 @@ genPrimaryExprP n =
     , genArrayP n
     , genMapP n
     , genSpliceP n
-    , map (embed ∘ Ident) genIdent
+    , map (embed ∘ Identifier) genIdent
     ]
 
 genCaseP ∷ ∀ m t. Int → GenSql m t

@@ -5,7 +5,8 @@ import Prelude
 import Control.Monad.Gen as Gen
 import Data.Either as E
 import Effect (Effect)
-import SqlSquared (SqlQuery, genSqlQuery, printQuery, tokenize)
+import SqlSquared (SqlQuery, genSqlQuery, printQuery)
+import SqlSquared.Parser as Parser
 import Test.QuickCheck as QC
 import Test.QuickCheck.Arbitrary as A
 
@@ -18,6 +19,6 @@ newtype ParseableSql = ParseableSql SqlQuery
 
 test ∷ Effect Unit
 test =
-  QC.quickCheck' 1000 \(ArbSql sql) → case tokenize $ printQuery sql of
+  QC.quickCheck' 1000 \(ArbSql sql) → case Parser.tokenize $ printQuery sql of
     E.Left err → QC.Failed $ "Tokenizer error: " <> show err <> " \n" <> printQuery sql
     E.Right _ → QC.Success

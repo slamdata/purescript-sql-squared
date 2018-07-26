@@ -14,7 +14,7 @@ import Matryoshka (class Corecursive, embed)
 import SqlSquared.Signature as Sig
 import SqlSquared.Utils ((∘))
 
-vari ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ String → t
+vari ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ Sig.Ident → t
 vari = embed ∘ Sig.Vari
 
 bool ∷ ∀ t. Corecursive t (Sig.SqlF EJsonF) ⇒ Boolean → t
@@ -54,7 +54,10 @@ splice ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ Maybe t → t
 splice = embed ∘ Sig.Splice
 
 ident ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ String → t
-ident = embed ∘ Sig.Ident
+ident = ident' ∘ Sig.Ident
+
+ident' ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ Sig.Ident → t
+ident' = embed ∘ Sig.Identifier
 
 match ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ t → L.List (Sig.Case t) → Maybe t → t
 match expr cases else_ = embed $ Sig.Match { expr, cases, else_ }
@@ -62,10 +65,10 @@ match expr cases else_ = embed $ Sig.Match { expr, cases, else_ }
 switch ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ L.List (Sig.Case t) → Maybe t → t
 switch cases else_ = embed $ Sig.Switch { cases, else_ }
 
-let_ ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ String → t → t → t
+let_ ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ Sig.Ident → t → t → t
 let_ id bindTo in_ = embed $ Sig.Let { ident: id, bindTo, in_ }
 
-invokeFunction ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ String → L.List t → t
+invokeFunction ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ Sig.Ident → L.List t → t
 invokeFunction name args = embed $ Sig.InvokeFunction {name, args}
 
 -- when (bool true) # then_ (num 1.0) :P
@@ -104,7 +107,10 @@ projection ∷ ∀ t. t → Sig.Projection t
 projection expr = Sig.Projection {expr, alias: Nothing}
 
 as ∷ ∀ t. String → Sig.Projection t → Sig.Projection t
-as s (Sig.Projection r) = Sig.Projection r { alias = Just s }
+as = as' ∘ Sig.Ident
+
+as' ∷ ∀ t. Sig.Ident → Sig.Projection t → Sig.Projection t
+as' s (Sig.Projection r) = Sig.Projection r { alias = Just s }
 
 groupBy ∷ ∀ t f. F.Foldable f ⇒ f t → Sig.GroupBy t
 groupBy f = Sig.GroupBy { keys: L.fromFoldable f, having: Nothing }

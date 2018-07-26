@@ -11,10 +11,10 @@ import Data.Newtype (class Newtype)
 import Data.String.Gen as GenS
 import Data.Traversable as T
 import Matryoshka (Algebra, CoalgebraM)
-import SqlSquared.Signature.Ident (printIdent)
+import SqlSquared.Signature.Ident (Ident(..), printIdent)
 import SqlSquared.Utils ((∘))
 
-newtype Projection a = Projection { expr ∷ a, alias ∷ Maybe String }
+newtype Projection a = Projection { expr ∷ a, alias ∷ Maybe Ident }
 
 derive instance functorProjection ∷ Functor Projection
 derive instance newtypeProjection ∷ Newtype (Projection a) _
@@ -36,5 +36,5 @@ printProjection (Projection { expr, alias }) = expr <> F.foldMap (\a → " AS " 
 
 genProjection ∷ ∀ m. Gen.MonadGen m ⇒ MonadRec m ⇒ CoalgebraM m Projection Int
 genProjection n = do
-  alias ← GenC.genMaybe GenS.genUnicodeString
+  alias ← map Ident <$> GenC.genMaybe GenS.genUnicodeString
   pure $ Projection { expr: n - 1, alias }

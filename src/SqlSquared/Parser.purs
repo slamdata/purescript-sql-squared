@@ -30,6 +30,7 @@ import SqlSquared.Constructors as C
 import SqlSquared.Parser.Tokenizer (Token(..), TokenStream, PositionedToken, tokenize, Literal(..), printToken)
 import SqlSquared.Path as Pt
 import SqlSquared.Signature as Sig
+import SqlSquared.Signature.Ident (Ident(..))
 import SqlSquared.Utils ((∘), type (×), (×))
 import Text.Parsing.Parser as P
 import Text.Parsing.Parser.Combinators as PC
@@ -177,7 +178,7 @@ letExpr = do
   bindTo ← expr
   operator ";"
   in_ ← expr
-  pure $ C.let_ i bindTo in_
+  pure $ C.let_ (Ident i) bindTo in_
 
 queryExpr ∷ ∀ m t. SqlParser' m t
 queryExpr = prod (query <|> definedExpr) queryBinop _BINOP
@@ -310,7 +311,7 @@ primaryExpr = asErrorMessage "primary expression" $ PC.choice
   , wildcard
   , arrayLiteral
   , mapLiteral
-  , ident <#> embed ∘ Sig.Ident
+  , ident <#> embed ∘ Sig.Identifier ∘ Ident
   ]
 
 caseExpr ∷ ∀ m t. SqlParser' m t
@@ -385,7 +386,7 @@ functionExpr ∷ ∀ m t. SqlParser' m t
 functionExpr = PC.try do
   name ← ident <|> anyKeyword
   args ← parenList
-  pure $ C.invokeFunction (S.toUpper name) args
+  pure $ C.invokeFunction (Ident (S.toUpper name)) args
 
 functionDecl
   ∷ ∀ m a
@@ -401,7 +402,7 @@ functionDecl parseExpr = asErrorMessage "function declaration" do
   _ ← keyword "begin"
   body ← parseExpr
   _ ← keyword "end"
-  pure $ Sig.FunctionDecl { ident: name, args, body }
+  pure $ Sig.FunctionDecl { ident: Ident name, args, body }
 
 import_
   ∷ ∀ m a
@@ -416,14 +417,14 @@ import_ = asErrorMessage "import declaration" do
 variable ∷ ∀ m t. SqlParser' m t
 variable = C.vari <$> variableString
 
-variableString ∷ ∀ m. Monad m ⇒ P.ParserT TokenStream m String
+variableString ∷ ∀ m. Monad m ⇒ P.ParserT TokenStream m Ident
 variableString = asErrorMessage "variable" $ PC.try do
   operator ":"
   PP.Position pos1 ← P.position
   s ← ident <|> anyKeyword
   PP.Position pos2 ← P.position
   guard (pos1.line == pos2.line && pos2.column == pos1.column + 1)
-  pure s
+  pure (Ident s)
 
 literal ∷ ∀ m t. SqlParser' m t
 literal = withToken "literal" case _ of
@@ -477,7 +478,7 @@ betweenSuffix = do
   lhs ← defaultExpr
   _ ← keyword "and"
   rhs ← defaultExpr
-  pure \e → C.invokeFunction "BETWEEN" (e : lhs : rhs : L.Nil)
+  pure \e → C.invokeFunction (Ident "BETWEEN") (e : lhs : rhs : L.Nil)
 
 inSuffix ∷ ∀ m t. SqlParser m t (t → t)
 inSuffix = do
@@ -574,7 +575,7 @@ tableRelation = do
   a ← PC.optionMaybe do
     _ ← keyword "as"
     ident
-  pure $ Sig.TableRelation { alias: a, path }
+  pure $ Sig.TableRelation { alias: Ident <$> a, path }
 
 variRelation ∷ ∀ m t. SqlParser m t (Sig.Relation t)
 variRelation = do
@@ -582,7 +583,7 @@ variRelation = do
   a ← PC.optionMaybe do
     _ ← keyword "as"
     ident
-  pure $ Sig.VariRelation { alias: a, vari }
+  pure $ Sig.VariRelation { alias: Ident <$> a, vari }
 
 exprRelation ∷ ∀ m t. SqlParser m t (Sig.Relation t)
 exprRelation = do
@@ -591,7 +592,7 @@ exprRelation = do
   operator ")"
   _ ← keyword "as"
   i ← ident
-  pure $ Sig.ExprRelation { aliasName: i, expr: e }
+  pure $ Sig.ExprRelation { alias: Ident i, expr: e }
 
 stdJoinRelation ∷ ∀ m t. SqlParser m t (Sig.Relation t → Sig.Relation t)
 stdJoinRelation = do
@@ -682,13 +683,13 @@ projection ∷ ∀ m t. SqlParser m t (Sig.Projection t)
 projection = do
   e ← definedExpr
   a ← PC.optionMaybe (keyword "as" *> ident)
-  pure $ Sig.Projection { expr: e, alias: a }
+  pure $ Sig.Projection { expr: e, alias: Ident <$> a }
 
 _SEARCH ∷ ∀ t. Corecursive t (Sig.SqlF EJ.EJsonF) ⇒ Boolean → t → t → t
-_SEARCH b lhs rhs = C.invokeFunction "SEARCH" $ lhs : rhs : (C.bool b) : L.Nil
+_SEARCH b lhs rhs = C.invokeFunction (Ident "SEARCH") $ lhs : rhs : (C.bool b) : L.Nil
 
 _LIKE ∷ ∀ t. Corecursive t (Sig.SqlF EJ.EJsonF) ⇒ Maybe t → t → t → t
-_LIKE mbEsc lhs rhs = C.invokeFunction "LIKE" $ lhs : rhs : (fromMaybe (C.string "\\") mbEsc) : L.Nil
+_LIKE mbEsc lhs rhs = C.invokeFunction (Ident "LIKE") $ lhs : rhs : (fromMaybe (C.string "\\") mbEsc) : L.Nil
 
 _NOT ∷ ∀ t. Corecursive t (Sig.SqlF EJ.EJsonF) ⇒ t → t
 _NOT = C.unop Sig.Not ∘ C.parens

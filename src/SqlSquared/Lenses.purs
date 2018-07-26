@@ -10,9 +10,7 @@ import Data.Lens.Iso.Newtype (_Newtype)
 import Data.List as L
 import Data.Maybe as M
 import Data.NonEmpty as NE
-
 import Matryoshka (class Recursive, class Corecursive, embed, project)
-
 import SqlSquared.Signature as S
 import SqlSquared.Utils (type (×), (∘), (⋙))
 
@@ -25,7 +23,7 @@ _Case = _Newtype
 _OrderBy ∷ ∀ a. Iso' (S.OrderBy a) (NE.NonEmpty L.List (S.OrderType × a))
 _OrderBy = _Newtype
 
-_Projection ∷ ∀ a. Iso' (S.Projection a) { expr ∷ a, alias ∷ M.Maybe String }
+_Projection ∷ ∀ a. Iso' (S.Projection a) { expr ∷ a, alias ∷ M.Maybe S.Ident }
 _Projection = _Newtype
 
 _JoinRelation ∷ ∀ a. Prism' (S.Relation a) (S.JoinRelR a)
@@ -193,13 +191,13 @@ _Unop = prism' (embed ∘ S.Unop) $ project ⋙ case _ of
   S.Unop r → M.Just r
   _ → M.Nothing
 
-_Ident
+_Identifier
   ∷ ∀ t f
   . Recursive t (S.SqlF f)
   ⇒ Corecursive t (S.SqlF f)
-  ⇒ Prism' t String
-_Ident = prism' (embed ∘ S.Ident) $ project ⋙ case _ of
-  S.Ident s → M.Just s
+  ⇒ Prism' t S.Ident
+_Identifier = prism' (embed ∘ S.Identifier) $ project ⋙ case _ of
+  S.Identifier s → M.Just s
   _ → M.Nothing
 
 _InvokeFunction
@@ -287,7 +285,7 @@ _Vari
   ∷ ∀ t f
   . Recursive t (S.SqlF f)
   ⇒ Corecursive t (S.SqlF f)
-  ⇒ Prism' t String
+  ⇒ Prism' t S.Ident
 _Vari = prism' (embed ∘ S.Vari) $ project ⋙ case _ of
   S.Vari r → M.Just r
   _ → M.Nothing
