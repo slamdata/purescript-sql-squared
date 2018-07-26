@@ -14,8 +14,8 @@ import Matryoshka (class Corecursive, embed)
 import SqlSquared.Signature as Sig
 import SqlSquared.Utils ((∘))
 
-vari ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ Sig.Ident → t
-vari = embed ∘ Sig.Vari
+var ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ Sig.Ident → t
+var = embed ∘ Sig.Var
 
 bool ∷ ∀ t. Corecursive t (Sig.SqlF EJsonF) ⇒ Boolean → t
 bool = embed ∘ Sig.Literal ∘ Boolean

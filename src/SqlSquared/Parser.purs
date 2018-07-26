@@ -306,7 +306,7 @@ primaryExpr = asErrorMessage "primary expression" $ PC.choice
       xs → embed $ Sig.SetLiteral xs
   , unaryOperator
   , functionExpr
-  , variable
+  , varable
   , literal
   , wildcard
   , arrayLiteral
@@ -397,7 +397,7 @@ functionDecl parseExpr = asErrorMessage "function declaration" do
   _ ← PC.try $ keyword "create" *> keyword "function"
   name ← ident
   operator "("
-  args ← PC.sepBy variableString $ operator ","
+  args ← PC.sepBy varableString $ operator ","
   operator ")"
   _ ← keyword "begin"
   body ← parseExpr
@@ -414,11 +414,11 @@ import_ = asErrorMessage "import declaration" do
   path ← Pt.parseAnyDirPath P.fail s
   pure $ Sig.Import path
 
-variable ∷ ∀ m t. SqlParser' m t
-variable = C.vari <$> variableString
+varable ∷ ∀ m t. SqlParser' m t
+varable = C.var <$> varableString
 
-variableString ∷ ∀ m. Monad m ⇒ P.ParserT TokenStream m Ident
-variableString = asErrorMessage "variable" $ PC.try do
+varableString ∷ ∀ m. Monad m ⇒ P.ParserT TokenStream m Ident
+varableString = asErrorMessage "varable" $ PC.try do
   operator ":"
   PP.Position pos1 ← P.position
   s ← ident <|> anyKeyword
@@ -557,7 +557,7 @@ relation = do
 simpleRelation ∷ ∀ m t. SqlParser m t (Sig.Relation t)
 simpleRelation =
   tableRelation
-  <|> variRelation
+  <|> varRelation
   <|> PC.try exprRelation
   <|> parenRelation
 
@@ -577,13 +577,13 @@ tableRelation = do
     ident
   pure $ Sig.TableRelation { alias: Ident <$> a, path }
 
-variRelation ∷ ∀ m t. SqlParser m t (Sig.Relation t)
-variRelation = do
-  vari ← variableString
+varRelation ∷ ∀ m t. SqlParser m t (Sig.Relation t)
+varRelation = do
+  var ← varableString
   a ← PC.optionMaybe do
     _ ← keyword "as"
     ident
-  pure $ Sig.VariRelation { alias: Ident <$> a, vari }
+  pure $ Sig.VarRelation { alias: Ident <$> a, var }
 
 exprRelation ∷ ∀ m t. SqlParser m t (Sig.Relation t)
 exprRelation = do

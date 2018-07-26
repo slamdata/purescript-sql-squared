@@ -29,8 +29,8 @@ type ExprRelR a =
   , alias ∷ ID.Ident
   }
 
-type VariRelR =
-  { vari ∷ ID.Ident
+type VarRelR =
+  { var ∷ ID.Ident
   , alias ∷ Maybe ID.Ident
   }
 
@@ -42,7 +42,7 @@ type TableRelR =
 data Relation a
   = JoinRelation (JoinRelR a)
   | ExprRelation (ExprRelR a)
-  | VariRelation VariRelR
+  | VarRelation VarRelR
   | TableRelation TableRelR
 
 derive instance functorRelation ∷ Functor Relation
@@ -76,7 +76,7 @@ instance traversableRelation ∷ T.Traversable Relation where
     ExprRelation  { expr, alias } →
       (ExprRelation ∘ { expr: _, alias })
       <$> f expr
-    VariRelation v → pure $ VariRelation v
+    VarRelation v → pure $ VarRelation v
     TableRelation i → pure $ TableRelation i
   sequence = T.sequenceDefault
 
@@ -84,8 +84,8 @@ printRelation ∷ Algebra Relation String
 printRelation = case _ of
   ExprRelation { expr, alias } →
     "(" <> expr <> ") AS " <> ID.printIdent alias
-  VariRelation { vari, alias } →
-    ":" <> ID.printIdent vari <> F.foldMap (\a → " AS " <> ID.printIdent a) alias
+  VarRelation { var, alias } →
+    ":" <> ID.printIdent var <> F.foldMap (\a → " AS " <> ID.printIdent a) alias
   TableRelation { path, alias } →
     "`"
     <> either Pt.printAnyDirPath Pt.printAnyFilePath path
@@ -105,19 +105,19 @@ genRelation n =
   if n < 1
   then
     Gen.oneOf $ genTable :|
-      [ genVari
+      [ genVar
       ]
   else
     Gen.oneOf $ genTable :|
-      [ genVari
+      [ genVar
       , genJoin
       , genExpr
       ]
   where
-  genVari = do
-    vari ← ID.Ident <$> GenS.genUnicodeString
+  genVar = do
+    var ← ID.Ident <$> GenS.genUnicodeString
     alias ← map ID.Ident <$> GenC.genMaybe GenS.genUnicodeString
-    pure $ VariRelation { vari, alias }
+    pure $ VarRelation { var, alias }
   genTable = do
     path ← Right <$> Pt.genAnyFilePath
     alias ← map ID.Ident <$> GenC.genMaybe GenS.genUnicodeString

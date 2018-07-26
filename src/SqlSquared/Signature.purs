@@ -61,7 +61,7 @@ import SqlSquared.Signature.JoinType (JoinType(..), genJoinType, joinTypeFromStr
 import SqlSquared.Signature.OrderBy (OrderBy(..), genOrderBy, printOrderBy) as OB
 import SqlSquared.Signature.OrderType (OrderType(..), genOrderType, orderTypeFromString, printOrderType) as OT
 import SqlSquared.Signature.Projection (Projection(..), genProjection, printProjection) as PR
-import SqlSquared.Signature.Relation (ExprRelR, JoinRelR, Relation(..), TableRelR, VariRelR, genRelation, printRelation) as RL
+import SqlSquared.Signature.Relation (ExprRelR, JoinRelR, Relation(..), TableRelR, VarRelR, genRelation, printRelation) as RL
 import SqlSquared.Signature.UnaryOperator (UnaryOperator(..), genUnaryOperator, printUnaryOperator, unopFromString, unopToString) as UO
 import SqlSquared.Utils (type (×), (×), (∘), (⋙))
 
@@ -124,7 +124,7 @@ data SqlF literal a
   | Match (MatchR a)
   | Switch (SwitchR a)
   | Let (LetR a)
-  | Vari ID.Ident
+  | Var ID.Ident
   | Select (SelectR a)
   | Parens a
 
@@ -175,7 +175,7 @@ instance foldableSqlF ∷ F.Foldable l ⇒ F.Foldable (SqlF l) where
     Match { expr, cases, else_ } → f expr <> F.foldMap (F.foldMap f) cases <> F.foldMap f else_
     Switch { cases, else_} → F.foldMap (F.foldMap f) cases <> F.foldMap f else_
     Let { bindTo, in_ } → f bindTo <> f in_
-    Vari _ → mempty
+    Var _ → mempty
     Select { projections, relations, filter, groupBy, orderBy } →
       F.foldMap (F.foldMap f) projections
       <> F.foldMap (F.foldMap f) relations
@@ -197,7 +197,7 @@ instance foldableSqlF ∷ F.Foldable l ⇒ F.Foldable (SqlF l) where
       F.foldl f (F.foldl (F.foldl f) a cases) else_
     Let { bindTo, in_} →
       f (f a bindTo) in_
-    Vari _ → a
+    Var _ → a
     Select { projections, relations, filter, groupBy, orderBy } →
       F.foldl (F.foldl f)
       (F.foldl (F.foldl f)
@@ -224,7 +224,7 @@ instance foldableSqlF ∷ F.Foldable l ⇒ F.Foldable (SqlF l) where
       F.foldr f (F.foldr (flip $ F.foldr f) a cases) else_
     Let { bindTo, in_ } →
       f bindTo $ f in_ a
-    Vari _ → a
+    Var _ → a
     Select { projections, relations, filter, groupBy, orderBy } →
       F.foldr (flip $ F.foldr f)
       (F.foldr (flip $ F.foldr f)
@@ -288,7 +288,7 @@ instance traversableSqlF ∷ T.Traversable l ⇒ T.Traversable (SqlF l) where
       $ { bindTo: _, in_: _, ident }
       <$> f bindTo
       <*> f in_
-    Vari s → pure $ Vari s
+    Var s → pure $ Var s
     Parens p → map Parens $ f p
     Select { isDistinct, projections, relations, filter, groupBy, orderBy } →
       map Select
@@ -349,7 +349,7 @@ printSqlF printLiteralF = case _ of
     <> " END"
   Let { ident, bindTo, in_ } →
     ID.printIdent ident <> " := " <> bindTo <> "; " <> in_
-  Vari s →
+  Var s →
     ":" <> ID.printIdent s
   Select { isDistinct, projections, relations, filter, groupBy, orderBy } →
     "SELECT "
@@ -390,7 +390,7 @@ genSqlF genLiteral n
   | n < 2 =
   Gen.oneOf $ (Literal <$> genLiteral n) :|
     [ map Identifier genIdent
-    , map Vari genIdent
+    , map Var genIdent
     , pure $ Splice Nothing
     , pure $ SetLiteral L.Nil
     ]

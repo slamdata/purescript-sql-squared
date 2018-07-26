@@ -36,9 +36,9 @@ _ExprRelation = prism' S.ExprRelation case _ of
   S.ExprRelation r → M.Just r
   _ → M.Nothing
 
-_VariRelation ∷ ∀ a. Prism' (S.Relation a) S.VariRelR
-_VariRelation = prism' S.VariRelation case _ of
-  S.VariRelation r → M.Just r
+_VarRelation ∷ ∀ a. Prism' (S.Relation a) S.VarRelR
+_VarRelation = prism' S.VarRelation case _ of
+  S.VarRelation r → M.Just r
   _ → M.Nothing
 
 _TableRelation ∷ ∀ a. Prism' (S.Relation a) S.TableRelR
@@ -281,13 +281,13 @@ _BoolLiteral = prism' (embed ∘ S.Literal ∘ EJ.Boolean) $ project ⋙ case _ 
   S.Literal (EJ.Boolean b) → M.Just b
   _ → M.Nothing
 
-_Vari
+_Var
   ∷ ∀ t f
   . Recursive t (S.SqlF f)
   ⇒ Corecursive t (S.SqlF f)
   ⇒ Prism' t S.Ident
-_Vari = prism' (embed ∘ S.Vari) $ project ⋙ case _ of
-  S.Vari r → M.Just r
+_Var = prism' (embed ∘ S.Var) $ project ⋙ case _ of
+  S.Var r → M.Just r
   _ → M.Nothing
 
 _Select
