@@ -5,6 +5,7 @@ import Prelude
 import Control.Monad.Gen as Gen
 import Control.Monad.Gen.Common as GenC
 import Control.Monad.Rec.Class (class MonadRec)
+import Data.Either (Either(..), either)
 import Data.Foldable as F
 import Data.Maybe (Maybe)
 import Data.NonEmpty ((:|))
@@ -15,6 +16,7 @@ import SqlSquared.Path as Pt
 import SqlSquared.Signature.Ident as ID
 import SqlSquared.Signature.JoinType as JT
 import SqlSquared.Utils ((∘))
+
 type JoinRelR a =
   { left ∷ Relation a
   , right ∷ Relation a
@@ -33,7 +35,7 @@ type VariRelR =
   }
 
 type TableRelR =
-  { path ∷ Pt.AnyFile
+  { path ∷ Either Pt.AnyDir Pt.AnyFile
   , alias ∷ Maybe String
   }
 
@@ -86,7 +88,7 @@ printRelation = case _ of
     ":" <> ID.printIdent vari <> F.foldMap (\a → " AS " <> ID.printIdent a) alias
   TableRelation { path, alias } →
     "`"
-    <> Pt.printAnyFilePath path
+    <> either Pt.printAnyDirPath Pt.printAnyFilePath path
     <> "`"
     <> F.foldMap (\x → " AS " <> ID.printIdent x) alias
   JoinRelation { left, right, joinType, clause } →
@@ -117,7 +119,7 @@ genRelation n =
     alias ← GenC.genMaybe GenS.genUnicodeString
     pure $ VariRelation { vari, alias }
   genTable = do
-    path ← Pt.genAnyFilePath
+    path ← Right <$> Pt.genAnyFilePath
     alias ← GenC.genMaybe GenS.genUnicodeString
     pure $ TableRelation { path, alias }
   genExpr = do

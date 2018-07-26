@@ -3,6 +3,8 @@ module SqlSquared.Path
   , printAnyFilePath
   , parseAnyDirPath
   , printAnyDirPath
+  , parseAnyPath
+  , printAnyPath
   , genAnyFilePath
   , genAnyDirPath
   , module PathyTypeReexprts
@@ -19,7 +21,6 @@ import Pathy (AnyDir, AnyFile) as PathyTypeReexprts
 import Pathy (AnyDir, AnyFile)
 import Pathy.Gen as PtGen
 import SqlSquared.Utils ((∘))
-
 
 printAnyDirPath :: AnyDir -> String
 printAnyDirPath = E.either
@@ -45,6 +46,17 @@ parseAnyFilePath fail = Pt.parsePath Pt.posixParser
   (const $ fail "Expected a file path")
   (pure ∘ E.Right)
   (pure ∘ E.Left)
+  (fail "Expected valid path")
+
+printAnyPath :: E.Either AnyDir AnyFile -> String
+printAnyPath = E.either printAnyDirPath printAnyFilePath
+
+parseAnyPath :: forall m. Applicative m => (forall a. String -> m a) -> String -> m (E.Either AnyDir AnyFile)
+parseAnyPath fail = Pt.parsePath Pt.posixParser
+  (pure ∘ E.Left ∘ E.Right)
+  (pure ∘ E.Left ∘ E.Left)
+  (pure ∘ E.Right ∘ E.Right)
+  (pure ∘ E.Right ∘ E.Left)
   (fail "Expected valid path")
 
 genAnyFilePath :: forall m. Gen.MonadGen m => MonadRec m => m AnyFile

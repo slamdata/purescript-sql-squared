@@ -570,7 +570,7 @@ parenRelation = do
 tableRelation ∷ ∀ m t. SqlParser m t (Sig.Relation t)
 tableRelation = do
   i ← ident
-  path ← Pt.parseAnyFilePath P.fail i
+  path ← Pt.parseAnyPath P.fail i
   a ← PC.optionMaybe do
     _ ← keyword "as"
     ident
