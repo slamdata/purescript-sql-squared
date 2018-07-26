@@ -124,5 +124,5 @@ buildSelect f =
       , orderBy: Nothing
       }
 
-pars ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ t → t
-pars = embed ∘ Sig.Parens
+parens ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ t → t
+parens = embed ∘ Sig.Parens

@@ -691,7 +691,7 @@ _LIKE ∷ ∀ t. Corecursive t (Sig.SqlF EJ.EJsonF) ⇒ Maybe t → t → t → 
 _LIKE mbEsc lhs rhs = C.invokeFunction "LIKE" $ lhs : rhs : (fromMaybe (C.string "\\") mbEsc) : L.Nil
 
 _NOT ∷ ∀ t. Corecursive t (Sig.SqlF EJ.EJsonF) ⇒ t → t
-_NOT = C.unop Sig.Not ∘ C.pars
+_NOT = C.unop Sig.Not ∘ C.parens
 
 _BINOP ∷ ∀ t. Corecursive t (Sig.SqlF EJ.EJsonF) ⇒ t → Sig.BinaryOperator → t → t
 _BINOP = flip C.binop
