@@ -23,7 +23,7 @@ selectQuery =
     ]
     ( Just $ S.TableRelation
         { alias: Nothing
-        , path: E.Left
+        , path: E.Right $ E.Left
           $ Pt.rootDir
           Pt.</> Pt.dir (SProxy :: SProxy "mongo")
           Pt.</> Pt.dir (SProxy :: SProxy "testDb")
@@ -50,7 +50,7 @@ buildSelectQuery =
     ∘ (S._relations ?~
          (S.TableRelation
            { alias: Nothing
-           , path: E.Left
+           , path: E.Right $ E.Left
              $ Pt.rootDir
              Pt.</> Pt.dir (SProxy :: SProxy "mongo")
              Pt.</> Pt.dir (SProxy :: SProxy "testDb")

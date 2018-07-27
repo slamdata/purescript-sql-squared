@@ -5,6 +5,7 @@ import Prelude
 import Control.Monad.Gen as Gen
 import Control.Monad.Gen.Common as GenC
 import Control.Monad.Rec.Class (class MonadRec)
+import Data.Either (Either(..), either)
 import Data.Foldable as F
 import Data.Maybe (Maybe)
 import Data.NonEmpty ((:|))
@@ -15,6 +16,7 @@ import SqlSquared.Path as Pt
 import SqlSquared.Signature.Ident as ID
 import SqlSquared.Signature.JoinType as JT
 import SqlSquared.Utils ((∘))
+
 type JoinRelR a =
   { left ∷ Relation a
   , right ∷ Relation a
@@ -24,23 +26,23 @@ type JoinRelR a =
 
 type ExprRelR a =
   { expr ∷ a
-  , aliasName ∷ String
+  , alias ∷ ID.Ident
   }
 
-type VariRelR =
-  { vari ∷ String
-  , alias ∷ Maybe String
+type VarRelR =
+  { var ∷ ID.Ident
+  , alias ∷ Maybe ID.Ident
   }
 
 type TableRelR =
-  { path ∷ Pt.AnyFile
-  , alias ∷ Maybe String
+  { path ∷ Either Pt.AnyDir Pt.AnyFile
+  , alias ∷ Maybe ID.Ident
   }
 
 data Relation a
   = JoinRelation (JoinRelR a)
   | ExprRelation (ExprRelR a)
-  | VariRelation VariRelR
+  | VarRelation VarRelR
   | TableRelation TableRelR
 
 derive instance functorRelation ∷ Functor Relation
@@ -71,22 +73,22 @@ instance traversableRelation ∷ T.Traversable Relation where
       <$> T.traverse f left
       <*> T.traverse f right
       <*> f clause
-    ExprRelation  { expr, aliasName} →
-      (ExprRelation ∘ { expr: _, aliasName})
+    ExprRelation  { expr, alias } →
+      (ExprRelation ∘ { expr: _, alias })
       <$> f expr
-    VariRelation v → pure $ VariRelation v
+    VarRelation v → pure $ VarRelation v
     TableRelation i → pure $ TableRelation i
   sequence = T.sequenceDefault
 
 printRelation ∷ Algebra Relation String
 printRelation = case _ of
-  ExprRelation {expr, aliasName} →
-    "(" <> expr <> ") AS " <> ID.printIdent aliasName
-  VariRelation { vari, alias} →
-    ":" <> ID.printIdent vari <> F.foldMap (\a → " AS " <> ID.printIdent a) alias
+  ExprRelation { expr, alias } →
+    "(" <> expr <> ") AS " <> ID.printIdent alias
+  VarRelation { var, alias } →
+    ":" <> ID.printIdent var <> F.foldMap (\a → " AS " <> ID.printIdent a) alias
   TableRelation { path, alias } →
     "`"
-    <> Pt.printAnyFilePath path
+    <> either Pt.printAnyDirPath Pt.printAnyFilePath path
     <> "`"
     <> F.foldMap (\x → " AS " <> ID.printIdent x) alias
   JoinRelation { left, right, joinType, clause } →
@@ -103,26 +105,26 @@ genRelation n =
   if n < 1
   then
     Gen.oneOf $ genTable :|
-      [ genVari
+      [ genVar
       ]
   else
     Gen.oneOf $ genTable :|
-      [ genVari
+      [ genVar
       , genJoin
       , genExpr
       ]
   where
-  genVari = do
-    vari ← GenS.genUnicodeString
-    alias ← GenC.genMaybe GenS.genUnicodeString
-    pure $ VariRelation { vari, alias }
+  genVar = do
+    var ← ID.Ident <$> GenS.genUnicodeString
+    alias ← map ID.Ident <$> GenC.genMaybe GenS.genUnicodeString
+    pure $ VarRelation { var, alias }
   genTable = do
-    path ← Pt.genAnyFilePath
-    alias ← GenC.genMaybe GenS.genUnicodeString
+    path ← Right <$> Pt.genAnyFilePath
+    alias ← map ID.Ident <$> GenC.genMaybe GenS.genUnicodeString
     pure $ TableRelation { path, alias }
   genExpr = do
-    aliasName ← GenS.genUnicodeString
-    pure $ ExprRelation { aliasName, expr: n - 1 }
+    alias ← ID.Ident <$> GenS.genUnicodeString
+    pure $ ExprRelation { alias, expr: n - 1 }
   genJoin = do
     joinType ← JT.genJoinType
     left ← genRelation $ n - 1

@@ -14,8 +14,8 @@ import Matryoshka (class Corecursive, embed)
 import SqlSquared.Signature as Sig
 import SqlSquared.Utils ((∘))
 
-vari ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ String → t
-vari = embed ∘ Sig.Vari
+var ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ Sig.Ident → t
+var = embed ∘ Sig.Var
 
 bool ∷ ∀ t. Corecursive t (Sig.SqlF EJsonF) ⇒ Boolean → t
 bool = embed ∘ Sig.Literal ∘ Boolean
@@ -54,19 +54,34 @@ splice ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ Maybe t → t
 splice = embed ∘ Sig.Splice
 
 ident ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ String → t
-ident = embed ∘ Sig.Ident
+ident = ident' ∘ Sig.Ident
+
+ident' ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ Sig.Ident → t
+ident' = embed ∘ Sig.Identifier
 
 match ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ t → L.List (Sig.Case t) → Maybe t → t
-match expr cases else_ = embed $ Sig.Match { expr, cases, else_ }
+match expr cases else_ = match' { expr, cases, else_ }
+
+match' ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ Sig.MatchR t → t
+match' = embed ∘ Sig.Match
 
 switch ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ L.List (Sig.Case t) → Maybe t → t
-switch cases else_ = embed $ Sig.Switch { cases, else_ }
+switch cases else_ = switch' { cases, else_ }
 
-let_ ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ String → t → t → t
+switch' ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ Sig.SwitchR t → t
+switch' = embed ∘ Sig.Switch
+
+let_ ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ Sig.Ident → t → t → t
 let_ id bindTo in_ = embed $ Sig.Let { ident: id, bindTo, in_ }
 
-invokeFunction ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ String → L.List t → t
-invokeFunction name args = embed $ Sig.InvokeFunction {name, args}
+let' ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ Sig.LetR t → t
+let' = embed ∘ Sig.Let
+
+invokeFunction ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ Sig.Ident → L.List t → t
+invokeFunction name args = invokeFunction' { name, args }
+
+invokeFunction' ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ Sig.InvokeFunctionR t → t
+invokeFunction' = embed ∘ Sig.InvokeFunction
 
 -- when (bool true) # then_ (num 1.0) :P
 when ∷ ∀ t. t → (t → Sig.Case t)
@@ -87,8 +102,7 @@ select
   → Maybe (Sig.OrderBy t)
   → t
 select isDistinct projections relations filter gb orderBy =
-  embed
-  $ Sig.Select
+  select'
     { isDistinct
     , projections: L.fromFoldable projections
     , relations
@@ -97,6 +111,8 @@ select isDistinct projections relations filter gb orderBy =
     , orderBy
     }
 
+select' ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ Sig.SelectR t → t
+select' = embed ∘ Sig.Select
 
 -- project (ident "foo") # as "bar"
 -- project (ident "foo")
@@ -104,7 +120,10 @@ projection ∷ ∀ t. t → Sig.Projection t
 projection expr = Sig.Projection {expr, alias: Nothing}
 
 as ∷ ∀ t. String → Sig.Projection t → Sig.Projection t
-as s (Sig.Projection r) = Sig.Projection r { alias = Just s }
+as = as' ∘ Sig.Ident
+
+as' ∷ ∀ t. Sig.Ident → Sig.Projection t → Sig.Projection t
+as' s (Sig.Projection r) = Sig.Projection r { alias = Just s }
 
 groupBy ∷ ∀ t f. F.Foldable f ⇒ f t → Sig.GroupBy t
 groupBy f = Sig.GroupBy { keys: L.fromFoldable f, having: Nothing }
@@ -114,9 +133,8 @@ having t (Sig.GroupBy r) = Sig.GroupBy r{ having = Just t }
 
 buildSelect ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ (Sig.SelectR t → Sig.SelectR t) → t
 buildSelect f =
-  embed
-  $ Sig.Select
-  $ f { isDistinct: false
+  select' $
+    f { isDistinct: false
       , projections: L.Nil
       , relations: Nothing
       , filter: Nothing
@@ -124,5 +142,5 @@ buildSelect f =
       , orderBy: Nothing
       }
 
-pars ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ t → t
-pars = embed ∘ Sig.Parens
+parens ∷ ∀ t f. Corecursive t (Sig.SqlF f) ⇒ t → t
+parens = embed ∘ Sig.Parens

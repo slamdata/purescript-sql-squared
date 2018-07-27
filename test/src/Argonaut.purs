@@ -26,7 +26,7 @@ data UnfoldableJC = JC JCursor | S String | I Int
 
 jcCoalgebra ∷ Coalgebra (S.SqlF EJsonF) UnfoldableJC
 jcCoalgebra = case _ of
-  S s → S.Ident s
+  S s → S.Identifier (S.Ident s)
   I i → S.Literal (Integer (HI.fromInt i))
   JC cursor → case cursor of
     JCursorTop → S.Splice Nothing
