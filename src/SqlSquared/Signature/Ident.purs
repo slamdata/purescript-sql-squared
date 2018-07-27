@@ -1,10 +1,17 @@
-module SqlSquared.Signature.Ident (Ident(..), printIdent) where
+module SqlSquared.Signature.Ident
+  ( Ident(..)
+  , printIdent
+  , genIdent
+  ) where
 
 import Prelude
 
+import Control.Monad.Gen as Gen
 import Data.Generic.Rep (class Generic)
 import Data.Generic.Rep.Show (genericShow)
+import Data.Int as Int
 import Data.Newtype (class Newtype)
+import Data.NonEmpty ((:|))
 import Data.Set as Set
 import Data.String as S
 import Data.String.Regex as RX
@@ -31,3 +38,9 @@ identifier = RXU.unsafeRegex "^[a-z][_a-z0-9]*$" RXF.ignoreCase
 
 tick ∷ RX.Regex
 tick = RXU.unsafeRegex "`" RXF.global
+
+genIdent ∷ ∀ m. Gen.MonadGen m ⇒ m Ident
+genIdent = do
+  start ← Gen.elements $ "a" :| S.split (S.Pattern "") "bcdefghijklmnopqrstuvwxyz"
+  body ← map (Int.toStringAs Int.hexadecimal) (Gen.chooseInt 0 100000)
+  pure $ Ident (start <> body)

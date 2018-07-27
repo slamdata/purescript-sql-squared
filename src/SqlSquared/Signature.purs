@@ -41,14 +41,12 @@ import Data.Eq (class Eq1)
 import Data.Foldable as F
 import Data.HugeInt as HI
 import Data.HugeNum as HN
-import Data.Int as Int
 import Data.Json.Extended as EJ
 import Data.List as L
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype)
 import Data.NonEmpty ((:|))
 import Data.Ord (class Ord1)
-import Data.String as S
 import Data.String.Gen as GenS
 import Data.Traversable as T
 import Matryoshka (Algebra, CoalgebraM, class Corecursive, embed)
@@ -56,7 +54,7 @@ import SqlSquared.Path as Pt
 import SqlSquared.Signature.BinaryOperator (BinaryOperator(..), binopFromString, binopToString, genBinaryOperator, printBinaryOperator) as BO
 import SqlSquared.Signature.Case (Case(..), genCase, printCase) as CS
 import SqlSquared.Signature.GroupBy (GroupBy(..), genGroupBy, printGroupBy) as GB
-import SqlSquared.Signature.Ident (Ident(..), printIdent) as ID
+import SqlSquared.Signature.Ident (Ident(..), genIdent, printIdent) as ID
 import SqlSquared.Signature.JoinType (JoinType(..), genJoinType, joinTypeFromString, printJoinType) as JT
 import SqlSquared.Signature.OrderBy (OrderBy(..), genOrderBy, printOrderBy) as OB
 import SqlSquared.Signature.OrderType (OrderType(..), genOrderType, orderTypeFromString, printOrderType) as OT
@@ -389,8 +387,8 @@ genSqlF
 genSqlF genLiteral n
   | n < 2 =
   Gen.oneOf $ (Literal <$> genLiteral n) :|
-    [ map Identifier genIdent
-    , map Var genIdent
+    [ map Identifier ID.genIdent
+    , map Var ID.genIdent
     , pure $ Splice Nothing
     , pure $ SetLiteral L.Nil
     ]
@@ -437,7 +435,7 @@ genUnop n = do
 
 genInvokeFunction ∷ ∀ m l. Gen.MonadGen m ⇒ CoalgebraM m (SqlF l) Int
 genInvokeFunction n = do
-  name ← genIdent
+  name ← ID.genIdent
   len ← Gen.chooseInt 0 $ n - 1
   pure $ InvokeFunction { name, args: map (const $ n - 1) $ L.range 0 len }
 
@@ -469,7 +467,7 @@ genSwitch n = do
 
 genLet ∷ ∀ m l. Gen.MonadGen m ⇒ CoalgebraM m (SqlF l) Int
 genLet n = do
-  ident ← genIdent
+  ident ← ID.genIdent
   pure $ Let { ident
              , bindTo: n - 1
              , in_: n - 1
@@ -516,23 +514,17 @@ genSelect n = do
 
 genFunctionDecl ∷ ∀ m. Gen.MonadGen m ⇒ CoalgebraM m SqlDeclF Int
 genFunctionDecl n = do
-  ident ← genIdent
+  ident ← ID.genIdent
   len ← Gen.chooseInt 0 $ n - 1
   let
     foldFn acc _ = do
-      arg ← genIdent
+      arg ← ID.genIdent
       pure $ arg L.: acc
   args ← L.foldM foldFn L.Nil $ L.range 0 len
   pure $ FunctionDecl { ident, args, body: n - 1 }
 
 genImport ∷ ∀ m a. Gen.MonadGen m ⇒ MonadRec m ⇒ m (SqlDeclF a)
 genImport = map Import Pt.genAnyDirPath
-
-genIdent ∷ ∀ m. Gen.MonadGen m ⇒ m ID.Ident
-genIdent = do
-  start ← Gen.elements $ "a" :| S.split (S.Pattern "") "bcdefghijklmnopqrstuvwxyz"
-  body ← map (Int.toStringAs Int.hexadecimal) (Gen.chooseInt 0 100000)
-  pure $ ID.Ident (start <> body)
 
 genDecls ∷ ∀ m. Gen.MonadGen m ⇒ MonadRec m ⇒ Int → m (L.List (SqlDeclF Int))
 genDecls n = do
@@ -568,7 +560,7 @@ genLeaf =
 
 genLetP ∷ ∀ m t. Int → GenSql m t
 genLetP n = do
-  ident ← genIdent
+  ident ← ID.genIdent
   bindTo ← genSql n
   in_ ← genSql n
   pure $ embed $ Let { ident, bindTo, in_ }
@@ -614,7 +606,7 @@ genPrimaryExprP n =
     , genArrayP n
     , genMapP n
     , genSpliceP n
-    , map (embed ∘ Identifier) genIdent
+    , map (embed ∘ Identifier) ID.genIdent
     ]
 
 genCaseP ∷ ∀ m t. Int → GenSql m t
