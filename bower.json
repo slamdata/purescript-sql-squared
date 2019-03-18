@@ -17,13 +17,13 @@
   "dependencies": {
     "purescript-prelude": "^4.0.1",
     "purescript-matryoshka": "^0.4.0",
-    "purescript-pathy": "^6.0.0",
-    "purescript-profunctor-lenses": "^4.0.0",
-    "purescript-ejson": "^11.0.0"
+    "purescript-pathy": "^7.0.0",
+    "purescript-profunctor-lenses": "^6.1.0",
+    "purescript-ejson": "^12.0.0"
   },
   "devDependencies": {
-    "purescript-quickcheck": "^5.0.0",
-    "purescript-test-unit": "^14.0.0",
-    "purescript-argonaut": "^4.0.1"
+    "purescript-quickcheck": "^6.1.0",
+    "purescript-argonaut": "^6.0.0",
+    "purescript-assert": "^4.1.0"
   }
 }

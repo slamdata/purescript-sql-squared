@@ -1,9 +1,8 @@
 module Test.Main where
 
-import Prelude
+import Test.Prelude
 
 import Effect (Effect)
-import Test.Unit.Main (runTest)
 import Test.Constructors as Constructors
 import Test.Argonaut as Argonaut
 import Test.Gen as Gen

@@ -1,6 +1,6 @@
 module Test.Constructors where
 
-import Prelude
+import Test.Prelude
 
 import Data.Either as E
 import Data.Lens ((.~), (<>~), (?~))
@@ -11,8 +11,6 @@ import Data.Symbol (SProxy(..))
 import Pathy as Pt
 import SqlSquared as S
 import SqlSquared.Utils ((×), (∘))
-import Test.Unit (suite, test, TestSuite)
-import Test.Unit.Assert as Assert
 
 selectQuery ∷ S.Sql
 selectQuery =
@@ -66,10 +64,10 @@ expectedSqlString ∷ String
 expectedSqlString =
   "SELECT DISTINCT foo AS field, bar.baz.* FROM `/mongo/testDb/patients` WHERE quux = 12.0 GROUP BY zzz HAVING ooo > 2 ORDER BY zzz ASC"
 
-testSuite ∷ TestSuite
+testSuite ∷ Test
 testSuite = do
   suite "tests for sql constructors" do
     test "constructing select query with multiple arguments"
-      $ Assert.equal expectedSqlString $ S.print selectQuery
+      $ assertEqual { actual: S.print selectQuery, expected: expectedSqlString }
     test "building select query with lenses"
-      $ Assert.equal expectedSqlString $ S.print buildSelectQuery
+      $ assertEqual { actual: S.print buildSelectQuery, expected: expectedSqlString }

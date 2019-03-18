@@ -1,63 +1,61 @@
 module Test.Parse where
 
-import Prelude
+import Test.Prelude
 
 import Data.Either as E
 import SqlSquared (parseQuery, printQuery, SqlQuery)
 import SqlSquared.Parser (prettyParse)
 import Test.Queries as Q
-import Test.Unit (suite, test, TestSuite)
-import Test.Unit.Assert as Assert
 
-parseSucc ∷ String → TestSuite
+parseSucc ∷ String → Test
 parseSucc s =
   test "parse/success"
   case prettyParse parseQuery s of
-    E.Left err → Assert.assert ("\n" <> err) false
+    E.Left err → assert ("\n" <> err) false
     E.Right (sql ∷ SqlQuery) →
       case prettyParse parseQuery (printQuery sql) of
         E.Left err →
-          Assert.assert
+          assert
             ("Failed to print and reparse.\n\n" <>
              "  Original: " <> s <> "\n\n" <>
              "  Printed:  " <> printQuery sql <> "\n\n" <> err) false
         E.Right (sql' ∷ SqlQuery)
           | sql' /= sql →
-            Assert.assert
+            assert
               ("Failed to parse to an equivalent AST.\n\n" <>
                "  Original: " <> s <> "\n\n" <>
                "  Parsed:   " <> printQuery sql <> "\n\n" <>
                "  Printed:  " <> printQuery sql') false
           | otherwise →
-            Assert.assert "OK!" true
+            assert "OK!" true
 
-parseFail ∷ String → TestSuite
+parseFail ∷ String → Test
 parseFail s =
   test "parse/fail"
   case parseQuery s of
     E.Left err → pure unit
-    E.Right (sql ∷ SqlQuery) → Assert.assert s false
+    E.Right (sql ∷ SqlQuery) → assert s false
 
-parseFailWith ∷ String → String → TestSuite
+parseFailWith ∷ String → String → Test
 parseFailWith s err =
   test "parse/failWith"
   case parseQuery s of
     E.Left err' →
       if show err' == err
         then pure unit
-        else Assert.assert
+        else assert
           ("expected query:" <> s <>
           "\n\n  to fail input error:   " <> err <>
           "\n\n  but instead fot error: " <> show err')
           false
     E.Right (sql ∷ SqlQuery) →
-      Assert.assert
+      assert
         ("expected to fail with:" <> err <>
         "\n\tbut input query:" <> s <>
         "\n\twas parsed as:" <> printQuery sql)
         false
 
-testSuite ∷ TestSuite
+testSuite ∷ Test
 testSuite = suite "parsers" do
   testSuite1
   testSuite2
@@ -66,7 +64,7 @@ testSuite = suite "parsers" do
   testSuite5
   testSuite6
 
-testSuite1 ∷ TestSuite
+testSuite1 ∷ Test
 testSuite1 = do
   parseFailWith """
     import `/path/To/Your/File/myModule`; SELECT id("HELLO")
@@ -253,7 +251,7 @@ testSuite1 = do
     select foo from :From
   """
 
-testSuite2 ∷ TestSuite
+testSuite2 ∷ Test
 testSuite2 = do
   parseSucc """
     SELECT state AS `ResultAlias`, COUNT(*) as cnt FROM zips GROUP BY state ORDER BY state
@@ -399,7 +397,7 @@ testSuite2 = do
     select distinct discipline from olympics where event like "%pursuit"
   """
 
-testSuite3 ∷ TestSuite
+testSuite3 ∷ Test
 testSuite3 = do
   parseSucc """
     select count(*) as cnt from zips where state in ("AZ", "CO")
@@ -593,7 +591,7 @@ testSuite3 = do
     select city, state, sum(pop) as total from zips group by city, state order by sum(pop) desc limit 10
   """
 
-testSuite4 ∷ TestSuite
+testSuite4 ∷ Test
 testSuite4 = do
   parseSucc """
     select city, pop from zips where pop > 90000 order by city, pop desc
@@ -751,7 +749,7 @@ testSuite4 = do
     select city, loc[0] as lat from largeZips
   """
 
-testSuite5 ∷ TestSuite
+testSuite5 ∷ Test
 testSuite5 = do
   parseSucc """
     select committer.login, count(*) from slamengine_commits
@@ -933,7 +931,7 @@ testSuite5 = do
     select foo from bar union all select baz from quux
   """
 
-testSuite6 ∷ TestSuite
+testSuite6 ∷ Test
 testSuite6 = do
   parseSucc Q.q1
   parseSucc Q.q2
