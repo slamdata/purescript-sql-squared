@@ -2,7 +2,7 @@
 -- | Having an array of `Json`s construct a list of Sql² projections
 module Test.Argonaut where
 
-import Prelude
+import Test.Prelude
 
 import Data.Argonaut (JCursor(..), jsonParser)
 import Data.Argonaut as JS
@@ -19,8 +19,6 @@ import Matryoshka (ana, elgotPara, Coalgebra, ElgotAlgebra)
 import Partial.Unsafe (unsafePartial)
 import SqlSquared as S
 import SqlSquared.Utils ((×), (∘), (⋙))
-import Test.Unit (suite, test, TestSuite)
-import Test.Unit.Assert as Assert
 
 data UnfoldableJC = JC JCursor | S String | I Int
 
@@ -65,7 +63,7 @@ jarray =
     , """{"foo": true}"""
     , """[12, null]"""
     ]
-testSuite ∷ TestSuite
+testSuite ∷ Test
 testSuite =
   suite "tests for argonaut example" do
     test "interpretation works"
@@ -79,7 +77,7 @@ testSuite =
           : (JField "foo" $ JField "bar" $ JField "baz" $ JCursorTop)
           : L.Nil
       in
-        Assert.equal expected $ map (S.print ∘ jcursorToSql) js
+        assertEqual { expected, actual: map (S.print ∘ jcursorToSql) js }
     test "extraction of fields works"
       let
         actualFields =
@@ -95,7 +93,7 @@ testSuite =
           : "*.bar.baz"
           : L.Nil
       in
-        Assert.equal expectedFields actualFields
+        assertEqual { expected: expectedFields, actual: actualFields }
     test "allParents extracted"
       let
         field =
@@ -115,7 +113,7 @@ testSuite =
           : "*.foo.bar[0].baz[1]"
           : L.Nil
       in
-        Assert.equal expected $ Set.fromFoldable $ map S.print $ allParents field
+        assertEqual { expected, actual: Set.fromFoldable $ map S.print $ allParents field }
     test "allFields works"
       let
         actualFields = Set.fromFoldable $ map S.print $ allFields jarray
@@ -131,4 +129,4 @@ testSuite =
           : "*.bar"
           : L.Nil
       in
-Assert.equal expectedFields actualFields
+        assertEqual { expected: expectedFields, actual: actualFields }
