@@ -9,6 +9,7 @@ import Data.Either (Either(..), either)
 import Data.Foldable as F
 import Data.Maybe (Maybe)
 import Data.NonEmpty ((:|))
+import Data.String as String
 import Data.String.Gen as GenS
 import Data.Traversable as T
 import Matryoshka (Algebra, CoalgebraM)
@@ -83,7 +84,10 @@ instance traversableRelation ∷ T.Traversable Relation where
 printRelation ∷ Algebra Relation String
 printRelation = case _ of
   ExprRelation { expr, alias } →
-    "(" <> expr <> ") AS " <> ID.printIdent alias
+    let
+      indented = String.contains (String.Pattern "\n") expr
+    in
+      "(" <> expr <> (if indented then "\n" else "") <> ") AS " <> ID.printIdent alias
   VarRelation { var, alias } →
     ":" <> ID.printIdent var <> F.foldMap (\a → " AS " <> ID.printIdent a) alias
   TableRelation { path, alias } →

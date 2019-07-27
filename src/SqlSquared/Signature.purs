@@ -12,6 +12,7 @@ module SqlSquared.Signature
   , SqlQueryF(..)
   , SqlModuleF(..)
   , printSqlF
+  , printSqlFPretty
   , printSqlDeclF
   , printSqlQueryF
   , printSqlModuleF
@@ -47,11 +48,12 @@ import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype)
 import Data.NonEmpty ((:|))
 import Data.Ord (class Ord1)
+import Data.String as String
 import Data.String.Gen as GenS
 import Data.Traversable as T
 import Matryoshka (Algebra, CoalgebraM, class Corecursive, embed)
 import SqlSquared.Path as Pt
-import SqlSquared.Signature.BinaryOperator (BinaryOperator(..), binopFromString, binopToString, genBinaryOperator, printBinaryOperator) as BO
+import SqlSquared.Signature.BinaryOperator (BinaryOperator(..), binopFromString, binopToString, genBinaryOperator, printBinaryOperator, printBinaryOperatorPretty) as BO
 import SqlSquared.Signature.Case (Case(..), genCase, printCase) as CS
 import SqlSquared.Signature.GroupBy (GroupBy(..), genGroupBy, printGroupBy) as GB
 import SqlSquared.Signature.Ident (Ident(..), genIdent, printIdent) as ID
@@ -360,6 +362,25 @@ printSqlF printLiteralF = case _ of
     <> (orderBy # F.foldMap \ob → " ORDER BY " <> OB.printOrderBy ob)
   Parens t →
     "(" <> t <> ")"
+
+printSqlFPretty ∷ ∀ l. Algebra l String → Algebra (SqlF l) String
+printSqlFPretty printLiteralF = case _ of
+  Binop {lhs, rhs, op} →
+    BO.printBinaryOperatorPretty lhs rhs op
+  Select { isDistinct, projections, relations, filter, groupBy, orderBy } →
+    "SELECT "
+    <> (if isDistinct then "DISTINCT " else "")
+    <> "\n  "
+    <> (F.intercalate ", \n  " $ map (reindent ∘ PR.printProjection) projections)
+    <> (relations # F.foldMap \rs → "\nFROM\n  " <> reindent (RL.printRelation rs))
+    <> (filter # F.foldMap \f → "\nWHERE\n  " <> f)
+    <> (groupBy # F.foldMap \gb → "\nGROUP BY\n  " <> reindent (GB.printGroupBy gb))
+    <> (orderBy # F.foldMap \ob → "\nORDER BY\n  " <> reindent (OB.printOrderBy ob))
+  other →
+    printSqlF printLiteralF other
+
+reindent ∷ String → String
+reindent = String.replaceAll (String.Pattern "\n") (String.Replacement "\n  ")
 
 printSqlDeclF ∷ Algebra SqlDeclF String
 printSqlDeclF = case _ of

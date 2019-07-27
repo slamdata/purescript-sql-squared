@@ -147,3 +147,8 @@ printBinaryOperator lhs rhs = case _ of
   IntersectAll → lhs <> " INTERSECT ALL " <> rhs
   Except → lhs <> " EXCEPT " <> rhs
   UnshiftMap → "{" <> lhs <> ": " <> rhs <> "...}"
+
+printBinaryOperatorPretty ∷ String → String → BinaryOperator → String
+printBinaryOperatorPretty lhs rhs = case _ of
+  UnionAll → lhs <> "\nUNION ALL\n" <> rhs
+  other → printBinaryOperator lhs rhs other
