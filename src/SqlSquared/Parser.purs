@@ -77,17 +77,18 @@ prettyParse parser input =
     SCU.fromCharArray (A.replicate (n - S.length s) ' ') <> s
 
   printError parseError =
-    let
-      message = P.parseErrorMessage parseError
-      PP.Position pos = P.parseErrorPosition parseError
-      lines = S.split (S.Pattern "\n") input
-      pre = A.drop (pos.line - 3) $ A.take (pos.line - 1) lines
-      line = A.take 1 $ A.drop (pos.line - 1) lines
-      post = A.take 3 $ A.drop pos.line lines
-      nums = A.mapWithIndex (\n l → padLeft 4 (show (n + pos.line - (A.length pre))) <> " | " <> l) (pre <> line <> post)
-      pointer = pure $ SCU.fromCharArray (A.replicate (pos.column - 1 + 7) '-') <> "^ " <> message
-    in
-      S.joinWith "\n" $ A.take (A.length pre + 1) nums <> pointer <> A.drop 3 nums
+    case P.parseErrorPosition parseError of
+      PP.Position pos →
+        let
+          message = P.parseErrorMessage parseError
+          lines = S.split (S.Pattern "\n") input
+          pre = A.drop (pos.line - 3) $ A.take (pos.line - 1) lines
+          line = A.take 1 $ A.drop (pos.line - 1) lines
+          post = A.take 3 $ A.drop pos.line lines
+          nums = A.mapWithIndex (\n l → padLeft 4 (show (n + pos.line - (A.length pre))) <> " | " <> l) (pre <> line <> post)
+          pointer = pure $ SCU.fromCharArray (A.replicate (pos.column - 1 + 7) '-') <> "^ " <> message
+        in
+          S.joinWith "\n" $ A.take (A.length pre + 1) nums <> pointer <> A.drop 3 nums
 
 parse
   ∷ ∀ t
