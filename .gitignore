@@ -1,7 +1,7 @@
+/.*
+!/.gitignore
+!/.github
 /bower_components/
 /node_modules/
-/.pulp-cache/
 /output/
-/.psc*
-/.psa*
-/.purs-repl
+package-lock.json

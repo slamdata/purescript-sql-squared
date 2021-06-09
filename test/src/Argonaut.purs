@@ -6,7 +6,7 @@ import Test.Prelude
 
 import Data.Argonaut (JCursor(..), jsonParser)
 import Data.Argonaut as JS
-import Data.Either (fromRight)
+import Data.Either (fromRight')
 import Data.Foldable as F
 import Data.HugeInt as HI
 import Data.Json.Extended.Signature (EJsonF(..))
@@ -16,7 +16,7 @@ import Data.Maybe (Maybe(..))
 import Data.Set as Set
 import Data.Tuple (Tuple, fst)
 import Matryoshka (ana, elgotPara, Coalgebra, ElgotAlgebra)
-import Partial.Unsafe (unsafePartial)
+import Partial.Unsafe (unsafeCrashWith)
 import SqlSquared as S
 import SqlSquared.Utils ((×), (∘), (⋙))
 
@@ -56,7 +56,7 @@ allFields =
 
 jarray ∷ Array JS.Json
 jarray =
-  map (unsafePartial fromRight ∘ jsonParser) jsonStrings
+  map (fromRight' (\_ → unsafeCrashWith "jarray parse failed") ∘ jsonParser) jsonStrings
   where
   jsonStrings =
     [ """{"foo": [{"bar": 1}, 12], "bar": {"baz": false}}"""
