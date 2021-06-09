@@ -54,11 +54,6 @@ type PositionedToken =
 
 type TokenStream = Array PositionedToken
 
-isKeyword ∷ Token → Boolean
-isKeyword = case _ of
-  Kw _ → true
-  _ → false
-
 isComment ∷ Token → Boolean
 isComment = case _ of
   Comment _ → true
@@ -72,7 +67,7 @@ printToken = case _ of
   Lit (String _) → "string literal"
   Lit (Integer _) → "integer literal"
   Lit (Decimal _) → "decimal literal"
-  Comment str → "comment"
+  Comment _ → "comment"
 
 op ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
 op = map Op $ PC.choice $ map PS.string operators
@@ -181,9 +176,6 @@ keywords = Set.fromFoldable
   , "all"
   ]
 
-digits ∷ Array Char
-digits = ['0','1','2','3','4','5','6','7','8','9' ]
-
 identOrKeyword ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
 identOrKeyword = quotedIdent <|> notQuotedIdentOrKeyword
 
@@ -215,9 +207,10 @@ quotedIdent =
     $ map S.fromCharArray
     $ A.some (PC.asErrorMessage "identifier character" identChar)
   where
-  identChar = identEscape <|> identLetter
+  identChar = identSlash <|> identEscape <|> identLetter
   identLetter = PS.satisfy (not ∘ eq '`')
   identEscape = PS.string "\\`" $> '`'
+  identSlash = PS.string "\\\\" $> '\\'
 
 notQuotedIdentOrKeyword ∷ ∀ m. Monad m ⇒ P.ParserT String m Token
 notQuotedIdentOrKeyword = do

@@ -8,11 +8,11 @@ import Prelude
 
 import Control.Monad.Gen as Gen
 import Data.Generic.Rep (class Generic)
-import Data.Generic.Rep.Show (genericShow)
 import Data.Int as Int
 import Data.Newtype (class Newtype)
 import Data.NonEmpty ((:|))
 import Data.Set as Set
+import Data.Show.Generic (genericShow)
 import Data.String as S
 import Data.String.Regex as RX
 import Data.String.Regex.Flags as RXF
@@ -31,13 +31,16 @@ printIdent ∷ Ident → String
 printIdent (Ident ident) =
   if RX.test identifier ident && not (Set.member (S.toLower ident) keywords)
   then ident
-  else "`" <> RX.replace tick ("\\`") ident <> "`"
+  else "`" <> RX.replace slash ("\\\\") (RX.replace tick ("\\`") ident) <> "`"
 
 identifier ∷ RX.Regex
 identifier = RXU.unsafeRegex "^[a-z][_a-z0-9]*$" RXF.ignoreCase
 
 tick ∷ RX.Regex
 tick = RXU.unsafeRegex "`" RXF.global
+
+slash ∷ RX.Regex
+slash = RXU.unsafeRegex "\\\\" RXF.global
 
 genIdent ∷ ∀ m. Gen.MonadGen m ⇒ m Ident
 genIdent = do

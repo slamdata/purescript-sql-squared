@@ -5,14 +5,14 @@ import Prelude
 import Control.Monad.Gen as Gen
 import Data.Foldable as F
 import Data.List as L
+import Data.List.NonEmpty as NEL
 import Data.Newtype (class Newtype)
-import Data.NonEmpty as NE
 import Data.Traversable as T
 import Matryoshka (Algebra, CoalgebraM)
 import SqlSquared.Signature.OrderType as OT
 import SqlSquared.Utils ((×), type (×))
 
-newtype OrderBy a = OrderBy (NE.NonEmpty L.List (OT.OrderType × a))
+newtype OrderBy a = OrderBy (NEL.NonEmptyList (OT.OrderType × a))
 
 derive instance functorOrderBy ∷ Functor OrderBy
 derive instance newtypeOrderBy ∷ Newtype (OrderBy a) _
@@ -36,7 +36,7 @@ genOrderBy ∷ ∀ m. Gen.MonadGen m ⇒ CoalgebraM m OrderBy Int
 genOrderBy n
   | n < 2 = do
     ot ← OT.genOrderType
-    pure $ OrderBy $ (ot × n - 1) NE.:| L.Nil
+    pure $ OrderBy $ pure (ot × n - 1)
   | otherwise = do
     len ← Gen.chooseInt 0 $ n - 1
     let
@@ -45,4 +45,4 @@ genOrderBy n
         pure $ (ot × n - 1) L.: acc
     lst ← L.foldM foldFn L.Nil $ L.range 0 len
     ot ← OT.genOrderType
-    pure $ OrderBy $ (ot × n - 1) NE.:| lst
+    pure $ OrderBy $ NEL.cons' (ot × n - 1) lst

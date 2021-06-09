@@ -16,7 +16,7 @@ derive instance eqCase ∷ Eq a ⇒ Eq (Case a)
 derive instance ordCase ∷ Ord a ⇒ Ord (Case a)
 
 instance foldableCase ∷ F.Foldable Case where
-  foldMap f (Case { cond, expr }) = f expr
+  foldMap f (Case { expr }) = f expr
   foldl f a (Case { cond, expr }) = f (f a cond) expr
   foldr f a (Case { cond, expr }) = f cond $ f expr a
 

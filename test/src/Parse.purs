@@ -9,7 +9,7 @@ import Test.Queries as Q
 
 parseSucc ∷ String → Test
 parseSucc s =
-  test "parse/success"
+  test ("parse/success: " <> s)
   case prettyParse parseQuery s of
     E.Left err → assert ("\n" <> err) false
     E.Right (sql ∷ SqlQuery) →
@@ -72,6 +72,10 @@ testSuite1 = do
 
   parseSucc """
     import `/path/To/Your/File/myModule/`; SELECT id("HELLO")
+  """
+
+  parseSucc """
+    select a as `\\`
   """
 
   parseSucc """

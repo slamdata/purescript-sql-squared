@@ -20,8 +20,8 @@ import Data.Foldable as F
 import Data.Json.Extended as EJ
 import Data.List ((:))
 import Data.List as L
+import Data.List.NonEmpty as NEL
 import Data.Maybe (Maybe(..), fromMaybe, isJust)
-import Data.NonEmpty ((:|))
 import Data.String as S
 import Data.String.CodeUnits as SCU
 import Data.Tuple (Tuple(..), uncurry)
@@ -111,7 +111,7 @@ parseModule
 parseModule = tokenize >=> flip P.runParser (moduleTop <* eof)
 
 queryTop ∷ ∀ m t. SqlParser m t (Sig.SqlQueryF t)
-queryTop = defer \_ → Sig.Query <$> (PC.sepEndBy decl $ operator ";") <*> expr
+queryTop = defer \_ → Sig.Query <$> PC.sepEndBy decl (operator ";") <*> expr
 
 moduleTop ∷ ∀ m t. SqlParser m t (Sig.SqlModuleF t)
 moduleTop = defer \_ → Sig.Module <$> PC.sepBy decl (operator ";")
@@ -639,7 +639,7 @@ groupBy ∷ ∀ m t. SqlParser m t (Sig.GroupBy t)
 groupBy = do
   _ ← keyword "group"
   _ ← keyword "by"
-  keys ← PC.sepBy1 definedExpr $ operator ","
+  keys ← NEL.toList <$> PC.sepBy1 definedExpr (operator ",")
   having ← PC.optionMaybe do
     _ ← keyword "having"
     definedExpr
@@ -655,10 +655,7 @@ orderBy prs = do
   _ ← keyword "order"
   _ ← keyword "by"
   pos ← P.position
-  lst ← flip PC.sepBy1 (operator ",") $ sortClause pos
-  case lst of
-    L.Nil → P.fail "incorrect order by"
-    x : xs → pure $ Sig.OrderBy (x :| xs)
+  Sig.OrderBy <$> flip PC.sepBy1 (operator ",") (sortClause pos)
   where
   sortPart = PC.choice
     [ keyword "asc" $> Sig.ASC

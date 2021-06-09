@@ -8,8 +8,8 @@ import Data.Json.Extended as EJ
 import Data.Lens (Prism', prism', Lens', lens, Iso')
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.List as L
+import Data.List.NonEmpty as NEL
 import Data.Maybe as M
-import Data.NonEmpty as NE
 import Matryoshka (class Recursive, class Corecursive, embed, project)
 import SqlSquared.Signature as S
 import SqlSquared.Utils (type (×), (∘), (⋙))
@@ -20,7 +20,7 @@ _GroupBy = _Newtype
 _Case ∷ ∀ a. Iso' (S.Case a) { cond ∷ a, expr ∷ a }
 _Case = _Newtype
 
-_OrderBy ∷ ∀ a. Iso' (S.OrderBy a) (NE.NonEmpty L.List (S.OrderType × a))
+_OrderBy ∷ ∀ a. Iso' (S.OrderBy a) (NEL.NonEmptyList (S.OrderType × a))
 _OrderBy = _Newtype
 
 _Projection ∷ ∀ a. Iso' (S.Projection a) { expr ∷ a, alias ∷ M.Maybe S.Ident }

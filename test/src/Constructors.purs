@@ -5,8 +5,8 @@ import Test.Prelude
 import Data.Either as E
 import Data.Lens ((.~), (<>~), (?~))
 import Data.List as L
+import Data.List.NonEmpty as NEL
 import Data.Maybe (Maybe(..))
-import Data.NonEmpty as NE
 import Data.Symbol (SProxy(..))
 import Pathy as Pt
 import SqlSquared as S
@@ -29,7 +29,7 @@ selectQuery =
         })
     ( Just $ S.binop S.Eq (S.ident "quux") (S.num 12.0) )
     ( Just $ S.groupBy [ S.ident "zzz" ] # S.having ( S.binop S.Gt (S.ident "ooo") ( S.int 2)) )
-    ( Just $ S.OrderBy $ NE.singleton $ S.ASC × (S.ident "zzz") )
+    ( Just $ S.OrderBy $ NEL.singleton $ S.ASC × (S.ident "zzz") )
 
 buildSelectQuery ∷ S.Sql
 buildSelectQuery =
@@ -58,7 +58,7 @@ buildSelectQuery =
     ∘ (S._filter ?~ S.binop S.Eq (S.ident "quux") (S.num 12.0))
     ∘ (S._groupBy ?~
          (S.groupBy [ S.ident "zzz" ] # S.having (S.binop S.Gt (S.ident "ooo") (S.int 2))))
-    ∘ (S._orderBy ?~ S.OrderBy (NE.singleton $ S.ASC × (S.ident "zzz")))
+    ∘ (S._orderBy ?~ S.OrderBy (NEL.singleton $ S.ASC × (S.ident "zzz")))
 
 expectedSqlString ∷ String
 expectedSqlString =

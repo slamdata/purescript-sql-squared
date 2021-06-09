@@ -588,7 +588,7 @@ genLetP n = do
 
 genQueryExprP ∷ ∀ m t. Int → GenSql m t
 genQueryExprP n
-  | n < 2 = Gen.oneOf $ genQueryP n :| [ genDefinedExprP n ]
+  | n < 2 = Gen.oneOf $ genQueryP :| [ genDefinedExprP n ]
   | otherwise = do
     op ←
       Gen.elements $ BO.Limit :|
@@ -596,16 +596,16 @@ genQueryExprP n
         , BO.UnionAll, BO.Intersect, BO.IntersectAll
         , BO.Except
         ]
-    lhs ← Gen.oneOf $ genQueryP n :| [ genDefinedExprP n ]
-    rhs ← Gen.oneOf $ genQueryP n :| [ genDefinedExprP n ]
+    lhs ← Gen.oneOf $ genQueryP :| [ genDefinedExprP n ]
+    rhs ← Gen.oneOf $ genQueryP :| [ genDefinedExprP n ]
     pure $ embed $ Binop { op, lhs, rhs }
 
 genDefinedExprP ∷ ∀ m t. Int → GenSql m t
 genDefinedExprP n = do
   binops ← Gen.resize (const n) $ Gen.unfoldable BO.genBinaryOperator
   unops ← Gen.resize (const n) $ Gen.unfoldable UO.genUnaryOperator
-  start ← genPrimaryExprP n
-  adds ← Gen.resize (const n) $ Gen.unfoldable $ genPrimaryExprP n
+  start ← genPrimaryExprP
+  adds ← Gen.resize (const n) $ Gen.unfoldable $ genPrimaryExprP
   pure $ F.foldl foldFn start $ A.zip binops $ A.zip unops adds
   where
   foldFn acc (binop × unop × rhs) =
@@ -617,39 +617,39 @@ genDefinedExprP n = do
       , expr: embed $ Binop { lhs: acc, rhs, op:binop }
       }
 
-genPrimaryExprP ∷ ∀ m t. Int → GenSql m t
-genPrimaryExprP n =
+genPrimaryExprP ∷ ∀ m t. GenSql m t
+genPrimaryExprP =
   Gen.oneOf $ genLeaf :|
-    [ genCaseP n
-    , genUnaryP n
-    , genFunctionP n
-    , genSetP n
-    , genArrayP n
-    , genMapP n
-    , genSpliceP n
+    [ genCaseP
+    , genUnaryP
+    , genFunctionP
+    , genSetP
+    , genArrayP
+    , genMapP
+    , genSpliceP
     , map (embed ∘ Identifier) ID.genIdent
     ]
 
-genCaseP ∷ ∀ m t. Int → GenSql m t
-genCaseP n = genLeaf
+genCaseP ∷ ∀ m t. GenSql m t
+genCaseP = genLeaf
 
-genUnaryP ∷ ∀ m t. Int → GenSql m t
-genUnaryP n = genLeaf
+genUnaryP ∷ ∀ m t. GenSql m t
+genUnaryP = genLeaf
 
-genFunctionP ∷ ∀ m t. Int → GenSql m t
-genFunctionP n = genLeaf
+genFunctionP ∷ ∀ m t. GenSql m t
+genFunctionP = genLeaf
 
-genSetP ∷ ∀ m t. Int → GenSql m t
-genSetP n = genLeaf
+genSetP ∷ ∀ m t. GenSql m t
+genSetP = genLeaf
 
-genArrayP ∷ ∀ m t. Int → GenSql m t
-genArrayP n = genLeaf
+genArrayP ∷ ∀ m t. GenSql m t
+genArrayP = genLeaf
 
-genMapP ∷ ∀ m t. Int → GenSql m t
-genMapP n = genLeaf
+genMapP ∷ ∀ m t. GenSql m t
+genMapP = genLeaf
 
-genSpliceP ∷ ∀ m t. Int → GenSql m t
-genSpliceP n = pure $ embed $ Splice Nothing
+genSpliceP ∷ ∀ m t. GenSql m t
+genSpliceP = pure $ embed $ Splice Nothing
 
-genQueryP ∷ ∀ m t. Int → GenSql m t
-genQueryP n = genLeaf
+genQueryP ∷ ∀ m t. GenSql m t
+genQueryP = genLeaf
